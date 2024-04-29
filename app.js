@@ -57,7 +57,7 @@ app.post("/login-user" , async(req, res) =>{
     const {email, password} = req.body;
     const oldUser = await User.findOne({ email : email });
 
-    if(!oldUser) return res.send({data: "User doesn't exist"});
+    if(!oldUser) return res.send({status: 401, data: "Invalid user or password"});
     
     if(await bcrypt.compare(password, oldUser.password)){
         const token = jwt.sign({email: oldUser.email}, JWT_SECRET);
@@ -68,6 +68,8 @@ app.post("/login-user" , async(req, res) =>{
             return res.send({ error: "error"});
         }
 
+    }{
+        return res.send({status: 401, data: "Invalid user or password"});
     }
 });
 
