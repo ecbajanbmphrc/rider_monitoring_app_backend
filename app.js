@@ -73,6 +73,22 @@ app.post("/login-user" , async(req, res) =>{
     }
 });
 
+app.post("/userdata", async(req, res)=> {
+    const {token} = req.body;
+
+    try {
+        const user = jwt.verify(token, JWT_SECRET)
+        const userEmail = user.email;
+
+        User.findOne({email: userEmail}).then((data)=>{
+            return res.send({ status: 200, data: data });
+        })
+    } catch (error) {
+            return res.send({error: error});
+    }
+
+});
+
 
 app.listen(8082, () => {
     console.log("node js server started");
