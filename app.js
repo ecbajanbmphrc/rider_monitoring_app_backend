@@ -2,6 +2,7 @@ const express = require("express");
 const app = express();
 const mongoose = require("mongoose");
 require('./UserDetails');
+require('./AttendanceDetails');
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
@@ -10,6 +11,8 @@ app.use(express.json());
 
 const mongoURI = "mongodb+srv://ecbajanbmphrc:y7eIFXEbU07QQOln@cluster0.5tjfmk7.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=Cluster0";
 const User = mongoose.model("users");
+
+const Attendance = mongoose.model("attendances");
 
 const JWT_SECRET = "asdfghjklzxcvbnmqwertyuiop";
 
@@ -88,6 +91,22 @@ app.post("/userdata", async(req, res)=> {
     }
 
 });
+
+
+app.post("/attendance-input", async(req, res) => {
+    const {user, date} = req.body;
+
+    try {
+        await Attendance.create({
+            user,
+            date
+        });
+        res.send({status: 200, data:"Attendance Created"})
+    } catch (error) {
+        res.send({ status: "error", data: error});
+    }
+});
+
 
 
 app.listen(8082, () => {
