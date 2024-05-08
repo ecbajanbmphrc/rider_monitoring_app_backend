@@ -94,15 +94,16 @@ app.post("/userdata", async(req, res)=> {
 
 
 
-app.post("/attendance-input", async(req, res) => {
-    const {user, w_date, date, time} = req.body;
+app.post("/attendance-input-time-in", async(req, res) => {
+    const {user, w_date, date, time_in, time_out} = req.body;
 
     try {
         await Attendance.create({
             user,
             w_date,
             date,
-            time
+            time_in,
+            time_out
         });
         res.send({status: 200, data:"Attendance Created"})
     } catch (error) {
@@ -126,6 +127,21 @@ app.post("/retrieve-user-attendance", async(req, res)=> {
 
 });
 
+app.put("/attendance-input-time-out", async(req, res) => {
+
+    const {user, time_out} = req.body;
+    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric'});
+    
+    try {
+        const userEmail = user;
+        await Attendance.findOneAndUpdate({user: userEmail, date: dateToday},{
+            time_out: time_out
+        });
+        res.send({status: 200, data:"Attendance Created"})
+    } catch (error) {
+        res.send({ status: "error", data: error});
+    }
+});
 
 app.listen(8082, () => {
   

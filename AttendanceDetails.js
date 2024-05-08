@@ -4,7 +4,8 @@ const AttendanceDetailSchema = new mongoose.Schema({
     user: String,
     wdate: String,
     date: String,
-    time: String
+    time_in: String,
+    time_out: String
 },{
     collection:"attendances"
 });
