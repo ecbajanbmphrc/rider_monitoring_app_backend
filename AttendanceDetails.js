@@ -2,7 +2,9 @@ const mongoose = require("mongoose");
 
 const AttendanceDetailSchema = new mongoose.Schema({
     user: String,
-    date: String
+    wdate: String,
+    date: String,
+    time: String
 },{
     collection:"attendances"
 });

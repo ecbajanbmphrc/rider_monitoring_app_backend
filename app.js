@@ -94,15 +94,15 @@ app.post("/userdata", async(req, res)=> {
 
 
 
-
-
 app.post("/attendance-input", async(req, res) => {
-    const {user, date} = req.body;
+    const {user, w_date, date, time} = req.body;
 
     try {
         await Attendance.create({
             user,
-            date
+            w_date,
+            date,
+            time
         });
         res.send({status: 200, data:"Attendance Created"})
     } catch (error) {
@@ -110,9 +110,25 @@ app.post("/attendance-input", async(req, res) => {
     }
 });
 
+app.post("/retrieve-user-attendance", async(req, res)=> {
+    const {user} = req.body;
+
+    try {
+        const userEmail = user;
+        const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric'});
+       
+       await Attendance.findOne({user: userEmail, date: dateToday}).then((data)=>{
+            return res.send({ status: 200, data: data });
+        })
+    } catch (error) {
+            return res.send({error: error});
+    }
+
+});
 
 
 app.listen(8082, () => {
-    console.log("node js server started");
+  
+    console.log("nade js server started");
 
 });
