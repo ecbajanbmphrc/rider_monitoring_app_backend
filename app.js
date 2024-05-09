@@ -95,7 +95,7 @@ app.post("/userdata", async(req, res)=> {
 
 
 app.post("/attendance-input-time-in", async(req, res) => {
-    const {user, w_date, date, time_in, time_out} = req.body;
+    const {user, w_date, date, time_in, time_in_latitude, time_in_longitude, time_out_latitude, time_out_longitude, time_out} = req.body;
 
     try {
         await Attendance.create({
@@ -103,6 +103,10 @@ app.post("/attendance-input-time-in", async(req, res) => {
             w_date,
             date,
             time_in,
+            time_in_latitude,
+            time_in_longitude,
+            time_out_latitude,
+            time_out_longitude,
             time_out
         });
         res.send({status: 200, data:"Attendance Created"})
@@ -129,13 +133,15 @@ app.post("/retrieve-user-attendance", async(req, res)=> {
 
 app.put("/attendance-input-time-out", async(req, res) => {
 
-    const {user, time_out} = req.body;
+    const {user, time_out, time_out_latitude, time_out_longitude} = req.body;
     const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric'});
     
     try {
         const userEmail = user;
         await Attendance.findOneAndUpdate({user: userEmail, date: dateToday},{
-            time_out: time_out
+            time_out: time_out,
+            time_out_latitude : time_out_latitude,
+            time_out_longitude : time_out_longitude
         });
         res.send({status: 200, data:"Attendance Created"})
     } catch (error) {
@@ -145,6 +151,6 @@ app.put("/attendance-input-time-out", async(req, res) => {
 
 app.listen(8082, () => {
   
-    console.log("nade js server started");
+    console.log("node js server started");
 
 });
