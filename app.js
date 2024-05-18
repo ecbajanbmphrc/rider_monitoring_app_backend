@@ -7,10 +7,13 @@ require('./ParcelDetails');
 require('./AttendanceInput');
 require('./ParcelInput');
 require('./ParcelData');
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 app.use(express.json());
+
+var cors = require('cors');
+app.use(cors());
 
 
 const mongoURI = "mongodb+srv://ecbajanbmphrc:y7eIFXEbU07QQOln@cluster0.5tjfmk7.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=Cluster0";
@@ -89,7 +92,7 @@ app.post("/login-user" , async(req, res) =>{
         const token = jwt.sign({email: oldUser.email}, JWT_SECRET);
         
         if(res.status(201)){
-            return res.send({ status: 200, data: token});
+            return res.send({ status: 200, data: token, email: oldUser.email, last_name: oldUser.last_name});
         }else{
             return res.send({ error: "error"});
         }
@@ -214,46 +217,7 @@ app.put("/parcel-input", async(req, res) => {
     }
 });
 
-// app.post("/retrieve-parcel-input", async(req, res)=> {
-  
-//     const {user} = req.body;
-//     const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric'});
 
-//     try {
-//         console.log("test parcel", user)
-//        await Parcel.find({ "parcel.date" : "5/13/2024"}
-//     //    ,
-//     //     {
-//     //         "parcel.$" : 1
-//     //     }
-//        ).then((data)=>{
-//             return res.send({ status: 200, data: data[0].parcel});
-//         })
-//     } catch (error) {
-//             return res.send({error: error});
-//     }
-
-// });
-
-
-// app.post("/retrieve-parcel-input", async(req, res)=> {
-  
-//     const {user} = req.body;
-//     const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric'});
-
-//     try {
-//         console.log("test parcel", user)
-//     await ParcelData.find({user: "juan18@gmail.com" , "parcel.parcel_type" : "Bulk"}
-        
-//         ).then((data)=>{
-//                 return res.send({ status: 200, data: data});
-//             })
-
-//     } catch (error) {
-//             return res.send({error: error});
-//     }
-
-// });
 
 
 app.post("/retrieve-parcel-input", async (req, res) => {
@@ -293,6 +257,61 @@ app.post("/retrieve-parcel-input", async (req, res) => {
         return res.status(500).json({ error: error.message });
     }
 });
+
+
+app.post("/get-all-user", async(req, res)=> {
+   
+
+    try {
+
+        User.find().then((data)=>{
+            return res.send({ status: 200, data: data });
+        })
+    } catch (error) {
+            return res.send({error: error});
+    }
+
+});
+
+
+app.post("/view-user-attendance", async(req, res)=> {
+   
+    const { user } = req.body;
+
+    const userEmail = user;
+
+    try {
+       
+        console.log(userEmail,"user check")
+        await Attendance.findOne({user: userEmail})
+        .then((data)=>{
+            return res.send({ status: 200, data: data.attendance });
+        })
+    } catch (error) {
+            return res.send({error: error});
+    }
+
+});
+
+app.post("/test-index", async(req, res)=> {
+   
+    const { user } = req.body;
+
+    const userEmail = user;
+
+    try {
+       
+        console.log(userEmail,"user check")
+        await Parcel.index({ user: 1})
+        .then((data)=>{
+            return res.send({ status: 200, data: data.attendance });
+        })
+    } catch (error) {
+            return res.send({error: error});
+    }
+
+});
+
 
 app.listen(8082, () => {
   
