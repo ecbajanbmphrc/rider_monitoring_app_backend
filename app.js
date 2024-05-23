@@ -67,6 +67,7 @@ app.post("/register-user-detail", async(req, res) => {
             phone,
             address,
             password: encryptedPassword,
+            isActivate: false
         });
         await Attendance.create({
             user: email,
@@ -86,7 +87,9 @@ app.post("/login-user" , async(req, res) =>{
     const {email, password} = req.body;
     const oldUser = await User.findOne({ email : email });
 
-    if(!oldUser) return res.send({status: 401, data: "Invalid user or password"});
+    if(!oldUser) return res.send({status: 401, data: "Invalid email or password"});
+
+    if(oldUser.isActivate === false) return res.send({status: 401, data: "User has not been activated yet."});
     
     if(await bcrypt.compare(password, oldUser.password)){
         const token = jwt.sign({email: oldUser.email}, JWT_SECRET);
@@ -100,6 +103,20 @@ app.post("/login-user" , async(req, res) =>{
     }{
         return res.send({status: 401, data: "Invalid user or password"});
     }
+});
+
+app.put("/update-status", async(req, res) => {
+    const {isActivate, email} = req.body;
+
+    const userEmail = email;
+    console.log(userEmail);
+    try{
+        await User.findOneAndUpdate({email: userEmail}, {$set: {isActivate: isActivate}});
+        res.send({status: 200, data:"Status updated"})
+    } catch(error){
+        res.send({status: "errorr", data: error});
+    }
+
 });
 
 app.post("/user-data", async(req, res)=> {
@@ -221,14 +238,14 @@ app.put("/parcel-input", async(req, res) => {
 
 
 app.post("/retrieve-parcel-input", async (req, res) => {
-    const { user } = req.body;
+    const { user, date } = req.body;
 
-    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric'});
+    const selectDate = date;
 
     try {
         console.log("Searching for parcels for user:", user);
 
-        // Aggregate to filter parcels for the specified user with parcel_type "Bulk"
+    
         const parcels = await Parcel.aggregate([
             {
                 $match: { user: user }
@@ -240,7 +257,7 @@ app.post("/retrieve-parcel-input", async (req, res) => {
                         $filter: {
                             input: "$parcel",
                             as: "parcel",
-                            cond: { $eq: ["$$parcel.date", dateToday] }
+                            cond: { $eq: ["$$parcel.date", selectDate] }
                         }
                     }
                 }
@@ -249,10 +266,10 @@ app.post("/retrieve-parcel-input", async (req, res) => {
 
         console.log("Found parcels:", parcels);
 
-        // Send the found parcels as a response
+     
         return res.status(200).json({ status: 200, data: parcels });
     } catch (error) {
-        // If an error occurs, send an error response
+      
         console.error("Error retrieving parcel data:", error);
         return res.status(500).json({ error: error.message });
     }
@@ -302,14 +319,103 @@ app.post("/test-index", async(req, res)=> {
     try {
        
         console.log(userEmail,"user check")
-        await Parcel.index({ user: 1})
+        await Parcel.find().count()
         .then((data)=>{
-            return res.send({ status: 200, data: data.attendance });
+            return res.send({ status: 200, data: data});
         })
     } catch (error) {
             return res.send({error: error});
     }
 
+});
+
+
+
+
+
+app.post("/retrieve-parcel-data", async(req, res)=> {
+
+  
+
+    try {
+    const parcelPerUser = await Parcel.aggregate([
+      { '$unwind': "$parcel" },
+
+      {
+        '$group': {
+         '_id': "$user",
+          'count_bulk': {
+            '$sum': { '$cond' : [ {'$and' :[{ '$eq': ["$parcel.parcel_type" , "Bulk"]},
+                                            { '$eq': ["$parcel.date" , "5/21/2024"]}]}, 1, 0] }
+          },
+          'count_non_bulk': {
+            '$sum': { '$cond' : [ {'$and' :[{ '$eq': ["$parcel.parcel_type" , "Non-bulk"]},
+                                            { '$eq': ["$parcel.date" , "5/21/2024"]}]}, 1, 0] }
+          },
+        }
+      },
+
+      {
+        '$project': {
+          'user': "$_id",
+          'count_bulk' : 1,
+          'count_non_bulk' : 1,
+          '_id': 0
+        }
+      }
+    ]);
+
+    console.log("Found parcels:", parcelPerUser);
+    return res.status(200).json({ status: 200, data: parcelPerUser });
+
+    } catch (error) {
+                return res.send({error: error});
+        }
+});
+
+
+app.post("/retrieve-user-parcel-data", async(req, res)=> {
+
+    const { user } = req.body;
+
+    const userEmail = user;
+
+    try {
+    const parcelPerUser = await Parcel.aggregate([
+      {'$match' : {'user' : userEmail }},
+      { '$unwind': "$parcel" },
+
+      {
+        '$group': {
+         '_id': '$parcel.date',
+          'count_bulk': {
+            '$sum': { '$cond' : [ {'$and' :[{ '$eq': ["$parcel.parcel_type" , "Bulk"]}]}, 1, 0] }
+          },
+          'count_non_bulk': {
+            '$sum': { '$cond' : [ {'$and' :[{ '$eq': ["$parcel.parcel_type" , "Non-bulk"]}]}, 1, 0] }
+          },
+        }
+      },
+
+      {
+        '$project': {
+          'date': "$_id",
+          'count_bulk' : 1,
+          'count_non_bulk' : 1,
+          '_id': 0
+        }
+      },
+      { 
+        $sort: { "date": -1 } 
+      },
+    ]);
+
+    console.log("Found parcels:", parcelPerUser);
+    return res.status(200).json({ status: 200, data: parcelPerUser });
+
+    } catch (error) {
+                return res.send({error: error});
+        }
 });
 
 

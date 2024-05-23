@@ -10,10 +10,10 @@ const UserDetailSchema = new mongoose.Schema({
     },
     phone: String,
     address: String,
-    password: String
+    password: String,
+    isActivate: Boolean
 },{
     collection:"users"
 });
 
 mongoose.model("users", UserDetailSchema);
-
