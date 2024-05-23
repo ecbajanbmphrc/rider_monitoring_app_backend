@@ -16,3 +16,5 @@ const ParcelDataSchema = new mongoose.Schema({
 
 mongoose.model("parcelData", ParcelDataSchema);
 
+
+
