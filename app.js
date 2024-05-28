@@ -1,14 +1,16 @@
 const express = require("express");
 const app = express();
 const mongoose = require("mongoose");
+require('dotenv').config()
 require('./UserDetails');
 require('./AttendanceDetails');
 require('./ParcelDetails');
 require('./AttendanceInput');
 require('./ParcelInput');
-require('./ParcelData');
+require('./ParcelData'); 
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const nodemailer = require("nodemailer");
 
 app.use(express.json());
 
@@ -419,8 +421,131 @@ app.post("/retrieve-user-parcel-data", async(req, res)=> {
 });
 
 
-app.listen(8082, () => {
-  
-    console.log("node js server started");
+const transporter = nodemailer.createTransport({
+    pool: true,
+    service: 'gmail',
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true, // Use `true` for port 465, `false` for all other ports
+    auth: {
+      user: process.env.Email,
+      pass: process.env.Pass,
+    },
+});
+
+
+
+
+// const sendMail = async (transporter, info) => {
+
+//     const data = "send mail"
+//     try{
+//         transporter.open();
+//         await transporter.sendMail(info)
+     
+//         transporter.open();
+//        return console.log('email has been sent');
+
+//     } catch (error){
+//         await transporter.close();
+//         transporter.open();
+//         return console.error(error);
+         
+//     }
+// }
+
+
+
+app.post("/send-otp-register", async(req, res)=> {
+    const { email} = req.body;
+
+    const oldUser = await User.findOne({email:email});
+    
+    if (oldUser) return res.send({data:"User already exist!"});
+
+    try {
+    //   await sendMail(transporter, info);
+
+        var code = Math.floor(100000 + Math.random() * 900000);   
+        code = String(code);
+        code = code.substring(0,4);
+
+      const info = await transporter.sendMail({
+        from: {
+            name: "BMPower",
+            address: process.env.Email
+        }, // sender address
+        to: email, // list of receivers
+        subject: "OTP code", // Subject line
+        html: "<b>Your OTP code is</b> " + code + "<b>. Do not share this code with others.</b>", // html body
+
+    });
+        return res.send({status : 200, data: info, email: email, code: code});
+    } catch (error) {
+        
+            return res.send({error: error});
+            // return res.send({data: data});
+    }
 
 });
+
+
+app.post("/send-otp-forgot-password", async(req, res)=> {
+    const { email} = req.body;
+
+    const oldUser = await User.findOne({email:email});
+    
+    if (!oldUser) return res.send({data:"User doesn't exist!"});
+
+    try {
+    //   await sendMail(transporter, info);
+
+        var code = Math.floor(100000 + Math.random() * 900000);   
+        code = String(code);
+        code = code.substring(0,4);
+
+      const info = transporter.sendMail({
+        from: {
+            name: "BMPower",
+            address: process.env.Email
+        }, 
+        to: email, 
+        subject: "OTP code", 
+        text: "Hello world?", 
+        html: "<b>Your OTP code is</b> " + code + "<b>. Do not share this code with others.</b>", // html body
+
+    });
+        return res.send({status : 200, data: info, email: email, code: code});
+    } catch (error) {
+        
+            return res.send({error: error});
+            // return res.send({data: data});
+    }
+
+});
+
+
+app.put("/forgot-password-reset", async(req, res) => {
+    const {password, email} = req.body;
+
+    const encryptedPassword = await bcrypt.hash(password, 8);
+
+    const userEmail = email;
+    console.log(userEmail);
+    try{
+        await User.findOneAndUpdate({email: userEmail}, {$set: {password: encryptedPassword}});
+        res.send({status: 200, data:"Password updated"})
+    } catch(error){
+        res.send({status: "error", data: error});
+    }
+
+});
+
+
+app.listen(8082, () => {
+    
+  
+    console.log("node js server started");
+    console.log(process.env.email) 
+
+});  
