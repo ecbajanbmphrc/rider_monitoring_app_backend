@@ -337,7 +337,7 @@ app.post("/test-index", async(req, res)=> {
 
 app.post("/retrieve-parcel-data", async(req, res)=> {
 
-  
+    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric'});
 
     try {
     const parcelPerUser = await Parcel.aggregate([
@@ -348,11 +348,11 @@ app.post("/retrieve-parcel-data", async(req, res)=> {
          '_id': "$user",
           'count_bulk': {
             '$sum': { '$cond' : [ {'$and' :[{ '$eq': ["$parcel.parcel_type" , "Bulk"]},
-                                            { '$eq': ["$parcel.date" , "5/21/2024"]}]}, 1, 0] }
+                                            { '$eq': ["$parcel.date" , dateToday]}]}, 1, 0] }
           },
           'count_non_bulk': {
             '$sum': { '$cond' : [ {'$and' :[{ '$eq': ["$parcel.parcel_type" , "Non-bulk"]},
-                                            { '$eq': ["$parcel.date" , "5/21/2024"]}]}, 1, 0] }
+                                            { '$eq': ["$parcel.date" , dateToday]}]}, 1, 0] }
           },
         }
       },
@@ -363,6 +363,11 @@ app.post("/retrieve-parcel-data", async(req, res)=> {
           'count_bulk' : 1,
           'count_non_bulk' : 1,
           '_id': 0
+        }
+      },
+      {
+        '$sort':{
+            'user' : 1
         }
       }
     ]);
