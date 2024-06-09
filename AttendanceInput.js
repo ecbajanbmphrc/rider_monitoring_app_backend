@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 
 const AttendanceInputSchema = new mongoose.Schema({
-    wdate: String,
+    wdate: Date,
     date: String,
     time_in: String,
     time_out: String,
