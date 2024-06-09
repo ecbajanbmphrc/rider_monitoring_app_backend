@@ -187,7 +187,7 @@ app.put("/attendance-input-time-in", async(req, res) => {
 app.get("/retrieve-user-attendance", async(req, res)=> {
   
     const userEmail = req.query.user;
-    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZon:'Asia/Manila'});
+    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric'});
 
     try {
        
@@ -302,7 +302,7 @@ app.post("/retrieve-parcel-input", async (req, res) => {
 
 app.post("/retrieve-user-attendance-today", async(req, res)=> {
 
-    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
+    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric'});
     try {
         console.log(dateToday)
         const attendanceToday = await Attendance.aggregate([
