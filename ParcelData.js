@@ -5,7 +5,7 @@ const ParcelDataSchema = new mongoose.Schema({
     parcel: [
          {       
         parcel_count : Number,
-        date : String,
+        date : Date,
         parcel_type: String
          }
 

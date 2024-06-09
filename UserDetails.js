@@ -11,7 +11,8 @@ const UserDetailSchema = new mongoose.Schema({
     phone: String,
     address: String,
     password: String,
-    isActivate: Boolean
+    isActivate: Boolean,
+    j_date : Date
 },{
     collection:"users"
 });

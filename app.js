@@ -19,6 +19,7 @@ app.use(cors());
 
 
 const mongoURI = "mongodb+srv://ecbajanbmphrc:EvqZlwFpXxeA6T6i@rmaproductionserverless.phmnjem.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=rmaProductionServerless";
+// const mongoURI = "mongodb+srv://ecbajanbmphrc:y7eIFXEbU07QQOln@cluster0.5tjfmk7.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=Cluster0";
 
 const User = mongoose.model("users");
 
@@ -57,6 +58,8 @@ app.post("/register-user-detail", async(req, res) => {
     const encryptedPassword = await bcrypt.hash(password, 8);
 
     const oldUser = await User.findOne({email:email});
+
+    const dateNow =  new Date();
     
     if (oldUser) return res.send({data:"User already exist!"});
 
@@ -69,7 +72,8 @@ app.post("/register-user-detail", async(req, res) => {
             phone,
             address,
             password: encryptedPassword,
-            isActivate: false
+            isActivate: false,
+            j_date : dateNow
         });
         await Attendance.create({
             user: email,
@@ -137,18 +141,33 @@ app.post("/user-data", async(req, res)=> {
 
 });
 
+app.post("/get-all-user", async(req, res)=> {
+   
+
+    try {
+
+        User.find().then((data)=>{
+            return res.send({ status: 200, data: data });
+        })
+    } catch (error) {
+            return res.send({error: error});
+    }
+
+});
 
 
 app.put("/attendance-input-time-in", async(req, res) => {
-    const dataSet = {user, w_date, date, time_in, time_in_coordinates, time_out_coordinates, time_out} = req.body;
+    const dataSet = {user, date, time_in, time_in_coordinates, time_out_coordinates, time_out} = req.body;
     
+    const dateNow =  new Date();
+
     try {
         const userEmail = user;
         await AttendanceInput.findOneAndUpdate({user: userEmail},{
           
             $addToSet: {
                 attendance: {
-                    w_date: w_date,
+                    w_date: dateNow,
                     date: date,
                     time_in : time_in,
                     time_in_coordinates : time_in_coordinates,
@@ -172,13 +191,13 @@ app.get("/retrieve-user-attendance", async(req, res)=> {
 
     try {
        
-        
-        console.log(userEmail,"user check")
-       await Attendance.findOne({user: userEmail, "attendance.date": dateToday}, {
-            "attendance.$" : 1
-       }).then((data)=>{
-            return res.send({ status: 200, data: data.attendance[0] });
+       console.log(userEmail,"user check")
+       const userAttendance = await Attendance.findOne({user: userEmail, "attendance.date": dateToday}, {
+            "attendance.$" : 1      
         })
+
+        if(!userAttendance) return res.send({status: 400, data :  "no data"});
+        return res.send({ status: 200, data: userAttendance.attendance[0] });
     } catch (error) {
             return res.send({error: error});
     }
@@ -215,6 +234,8 @@ app.put("/attendance-input-time-out", async(req, res) => {
 app.put("/parcel-input", async(req, res) => {
     const dataSet = {user, date, parcel_count, parcel_type} = req.body;
 
+    const dateNow =  new Date();
+
     console.log(req.body)
 
     try {
@@ -225,7 +246,8 @@ app.put("/parcel-input", async(req, res) => {
             parcel: {
                 parcel_count : parcel_count,
                 date : date,
-                parcel_type : parcel_type
+                parcel_type : parcel_type,
+                w_date : dateNow
             }
          }
             
@@ -278,17 +300,102 @@ app.post("/retrieve-parcel-input", async (req, res) => {
 });
 
 
-app.post("/get-all-user", async(req, res)=> {
-   
+app.post("/retrieve-user-attendance-today", async(req, res)=> {
 
+    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric'});
     try {
+        console.log(dateToday)
+        const attendanceToday = await Attendance.aggregate([
+        {'$unwind' : "$attendance"},
+        // {
+        //  '$match' : {"date" : "5/13/2024"}
+        // },
+        {
+         '$group' : {
+            '_id' : "$user",
+            'date' : {'$last': "$attendance.date"} ,
+            'timeIn' : {'$last': "$attendance.time_in"} ,
+            'timeInCoordinates' : {'$last': "$attendance.time_in_coordinates"}, 
+            'timeOut' : {'$last': "$attendance.time_out"},
+            'timeOutCoordinates' : {'$last': "$attendance.time_out_coordinates"}, 
+         
+         }  
+        },
+        {
+         '$project': {
+            'user' : '$_id',
+            'dateSeparate' : '$date',
+            'timeIn' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeIn", "no record"]},
+            'timeInCoordinates' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeInCoordinates", "no record"]}, 
+            'timeOut' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeOut", "no record"]},
+            'timeOutCoordinates' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeOutCoordinates", "no record"]},
+            'email' : '$user',
+            
+            
+         } 
+        },
+          {
+         '$sort' : {"user": 1}
+        },
 
-        User.find().then((data)=>{
-            return res.send({ status: 200, data: data });
-        })
+        ])
+       
+            return res.send({ status: 200, data: attendanceToday });
+       
     } catch (error) {
             return res.send({error: error});
     }
+
+
+});
+
+
+app.post("/export-attendance-data", async(req, res)=> {
+
+    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric'});
+    try {
+        console.log(dateToday)
+        const attendanceToday = await Attendance.aggregate([
+        {'$unwind' : "$attendance"},
+        // {
+        //  '$match' : {"date" : "5/13/2024"}
+        // },
+        {
+         '$group' : {
+            '_id' : "$user",
+            'date' : {'$last': "$attendance.date"} ,
+            'timeIn' : {'$last': "$attendance.time_in"} ,
+            'timeInCoordinates' : {'$last': "$attendance.time_in_coordinates"}, 
+            'timeOut' : {'$last': "$attendance.time_out"},
+            'timeOutCoordinates' : {'$last': "$attendance.time_out_coordinates"}, 
+         
+         }  
+        },
+        {
+         '$project': {
+            'user' : '$_id',
+            'dateSeparate' : '$date',
+            'timeIn' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeIn", "no record"]},
+            'timeInCoordinates' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeInCoordinates", "no record"]}, 
+            'timeOut' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeOut", "no record"]},
+            'timeOutCoordinates' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeOutCoordinates", "no record"]},
+            'email' : '$user',
+            
+            
+         } 
+        },
+          {
+         '$sort' : {"user": 1}
+        },
+
+        ])
+       
+            return res.send({ status: 200, data: attendanceToday });
+       
+    } catch (error) {
+            return res.send({error: error});
+    }
+
 
 });
 
@@ -312,26 +419,82 @@ app.post("/view-user-attendance", async(req, res)=> {
 
 });
 
+// app.post("/test-index", async(req, res)=> {
+   
+//     const { user } = req.body;
+
+//     const userEmail = user;
+
+//     try {
+       
+//         const data = await Attendance.aggregate([
+//             {
+           
+//             // $group :
+//             // {
+//             //     _id:"$user",
+//             //     date: { $addToSet : {$eq: ["$attendance.date" , "5/13/2024"]}}
+//             // },
+//             // $match : {
+//             //     "$date" : {$eq : "5/13/2024"}
+//             // },
+//             $project: {
+//               attendance: {
+//                 $filter:{
+//                     input:"$attendance",
+//                     as: "date",
+//                     cond: { $eq: [ "$$date.date", "5/13/2024"]}
+//                 }
+//               },
+//               user: "$user"
+//             }
+//             }
+//         ])
+         
+//         return res.send({ status: 200, data: data});
+        
+//     } catch (error) {
+//             return res.send({error: error});
+//     }
+
+// });
+
 app.post("/test-index", async(req, res)=> {
    
     const { user } = req.body;
 
+    // var checkDate =new Date("2024-05-21T00:48:02.000+00:00");
+    var checkDate =new Date("2024-06-09T16:26:18.733Z");
+    const dateNow =  new Date();
+    var getget = checkDate.getTime();
+    
+    console.log(getget)
     const userEmail = user;
 
     try {
        
-        console.log(userEmail,"user check")
-        await Parcel.find().count()
-        .then((data)=>{
-            return res.send({ status: 200, data: data});
-        })
+        const data = await Attendance.aggregate([
+            {
+             $unwind: "$attendance"
+            },
+            {
+             $project:{
+                user : 1,
+                date: "$attendance.date",
+                datePicker : {$eq :[{ $toLong :"$attendance.w_date"}, {$toLong : checkDate}]},
+                dateTest: { $toLong :"$attendance.w_date"}
+             }
+            }
+        ])
+        // console.log(result);
+         
+        return res.send({ status: 200, data: data});
+        
     } catch (error) {
             return res.send({error: error});
     }
 
 });
-
-
 
 
 
@@ -441,26 +604,6 @@ const transporter = nodemailer.createTransport({
 
 
 
-// const sendMail = async (transporter, info) => {
-
-//     const data = "send mail"
-//     try{
-//         transporter.open();
-//         await transporter.sendMail(info)
-     
-//         transporter.open();
-//        return console.log('email has been sent');
-
-//     } catch (error){
-//         await transporter.close();
-//         transporter.open();
-//         return console.error(error);
-         
-//     }
-// }
-
-
-
 app.post("/send-otp-register", async(req, res)=> {
     const { email} = req.body;
 
@@ -546,10 +689,67 @@ app.put("/forgot-password-reset", async(req, res) => {
 
 });
 
+app.post("/get-user-data-dashboard", async(req, res) => {
+
+    const {email} = req.body;
+
+    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric'});
+     
+
+    try {
+    const userParcel = await Parcel.aggregate([
+      { '$match': {'user' : email}},
+      { '$unwind': "$parcel" },
+
+      {
+        '$group': {
+         '_id': "$user",
+          'count_bulk': {
+            '$sum': { '$cond' : [ {'$and' :[{ '$eq': ["$parcel.parcel_type" , "Bulk"]},
+                                            { '$eq': ["$parcel.date" , dateToday]}]}, 1, 0] }
+          },
+          'count_non_bulk': {
+            '$sum': { '$cond' : [ {'$and' :[{ '$eq': ["$parcel.parcel_type" , "Non-bulk"]},
+                                            { '$eq': ["$parcel.date" , dateToday]}]}, 1, 0] }
+          },
+        }
+      },
+
+      {
+        '$project': {
+          'user': "$_id",
+          'count_bulk' : 1,
+          'count_non_bulk' : 1,
+          '_id': 0
+        }
+      },
+      {
+        '$sort':{
+            'user' : 1
+        }
+      }
+    ]);
+
+    console.log("Found parcels:", userParcel);
+    return res.status(200).json({ status: 200, data: userParcel });
+
+    } catch (error) {
+                return res.send({error: error});
+        }
+
+});
+
 
 app.listen(8082, () => {
     
-  
+    const dateObj =  Date();
+    const newDObj = new Date();
+    console.log(dateObj)
+    console.log(newDObj)
+    var checkDate =new Date("2024-06-09T17:09:15.937+00:00");
+    // const checker = checkDate.getMinutes();
+    // console.log(checker);
+
     console.log("node js server started");
     console.log(process.env.email) 
 
