@@ -207,7 +207,7 @@ app.get("/retrieve-user-attendance", async(req, res)=> {
 app.put("/attendance-input-time-out", async(req, res) => {
 
     const {user, time_out, time_out_coordinates} = req.body;
-    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric'});
+    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
     console.log(time_out)
     
     try {
@@ -500,7 +500,7 @@ app.post("/test-index", async(req, res)=> {
 
 app.post("/retrieve-parcel-data", async(req, res)=> {
 
-    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric'});
+    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
 
     try {
     const parcelPerUser = await Parcel.aggregate([
@@ -693,7 +693,7 @@ app.post("/get-user-data-dashboard", async(req, res) => {
 
     const {email} = req.body;
 
-    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric'});
+    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
      
 
     try {
