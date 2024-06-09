@@ -187,7 +187,7 @@ app.put("/attendance-input-time-in", async(req, res) => {
 app.get("/retrieve-user-attendance", async(req, res)=> {
   
     const userEmail = req.query.user;
-    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZon:'Asia/Manila'});
+    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone:'Asia/Manila'});
 
     try {
        
@@ -743,9 +743,9 @@ app.post("/get-user-data-dashboard", async(req, res) => {
 app.listen(8082, () => {
     
     const dateObj =  Date();
-    const newDObj = new Date();
+    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone:'Asia/Manila'});
     console.log(dateObj)
-    console.log(newDObj)
+    console.log(dateToday)
     var checkDate =new Date("2024-06-09T17:09:15.937+00:00");
     // const checker = checkDate.getMinutes();
     // console.log(checker);
