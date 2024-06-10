@@ -18,8 +18,8 @@ var cors = require('cors');
 app.use(cors());
 
 
-const mongoURI = "mongodb+srv://ecbajanbmphrc:EvqZlwFpXxeA6T6i@rmaproductionserverless.phmnjem.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=rmaProductionServerless";
-// const mongoURI = "mongodb+srv://ecbajanbmphrc:y7eIFXEbU07QQOln@cluster0.5tjfmk7.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=Cluster0";
+// const mongoURI = "mongodb+srv://ecbajanbmphrc:EvqZlwFpXxeA6T6i@rmaproductionserverless.phmnjem.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=rmaProductionServerless";
+const mongoURI = "mongodb+srv://ecbajanbmphrc:y7eIFXEbU07QQOln@cluster0.5tjfmk7.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=Cluster0";
 
 const User = mongoose.model("users");
 
@@ -461,30 +461,32 @@ app.post("/view-user-attendance", async(req, res)=> {
 
 app.post("/test-index", async(req, res)=> {
    
-    const { user } = req.body;
+    const { start, end } = req.body;
 
     // var checkDate =new Date("2024-05-21T00:48:02.000+00:00");
-    var checkDate =new Date("2024-06-09T16:26:18.733Z");
+    var checkDate =new Date("2024-05-21T18:36:20.153+00:00");
     const dateNow =  new Date();
     var getget = checkDate.getTime();
     
     console.log(getget)
-    const userEmail = user;
+  
 
     try {
        
         const data = await Attendance.aggregate([
             {
              $unwind: "$attendance"
-            },
-            {
-             $project:{
-                user : 1,
-                date: "$attendance.date",
-                datePicker : {$eq :[{ $toLong :"$attendance.w_date"}, {$toLong : checkDate}]},
-                dateTest: { $toLong :"$attendance.w_date"}
-             }
+            },{
+                $match: {
+                    $expr: {
+                        $and: [
+                            {$gte : [{$toLong: "$attendance.w_date"} ,  start]},
+                            {$lte : [{$toLong: "$attendance.w_date"} , end]}
+                        ]
+                    }
+                }
             }
+        
         ])
         // console.log(result);
          
