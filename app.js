@@ -8,9 +8,12 @@ require('./ParcelDetails');
 require('./AttendanceInput');
 require('./ParcelInput');
 require('./ParcelData'); 
+require('./AssignedParcel')
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
+// var moment = require('moment');
+var moment = require('moment-timezone');
 
 app.use(express.json());
 
@@ -18,8 +21,8 @@ var cors = require('cors');
 app.use(cors());
 
 
-const mongoURI = "mongodb+srv://ecbajanbmphrc:EvqZlwFpXxeA6T6i@rmaproductionserverless.phmnjem.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=rmaProductionServerless";
-// const mongoURI = "mongodb+srv://ecbajanbmphrc:y7eIFXEbU07QQOln@cluster0.5tjfmk7.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=Cluster0";
+// const mongoURI = "mongodb+srv://ecbajanbmphrc:EvqZlwFpXxeA6T6i@rmaproductionserverless.phmnjem.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=rmaProductionServerless";
+const mongoURI = "mongodb+srv://ecbajanbmphrc:y7eIFXEbU07QQOln@cluster0.5tjfmk7.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=Cluster0";
 
 const User = mongoose.model("users");
 
@@ -32,6 +35,8 @@ const AttendanceInput = mongoose.model("attendanceInput");
 const ParcelInput = mongoose.model("parcelInput");
 
 const ParcelData = mongoose.model("parcelData");
+
+const AssignedParcel = mongoose.model("assignedParcel")
 
 const JWT_SECRET = "asdfghjklzxcvbnmqwertyuiop";
 
@@ -157,9 +162,11 @@ app.post("/get-all-user", async(req, res)=> {
 
 
 app.put("/attendance-input-time-in", async(req, res) => {
-    const dataSet = {user, date, time_in, time_in_coordinates, time_out_coordinates, time_out} = req.body;
+    const dataSet = {user, time_in_coordinates, time_out_coordinates, time_out} = req.body;
     
     const dateNow =  new Date();
+    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone:'Asia/Manila'});
+    const timeNow = new Date().toLocaleString('en-us',{hour:'numeric', minute:'numeric', second:'numeric', timeZone:'Asia/Manila'});
 
     try {
         const userEmail = user;
@@ -168,8 +175,8 @@ app.put("/attendance-input-time-in", async(req, res) => {
             $addToSet: {
                 attendance: {
                     w_date: dateNow,
-                    date: date,
-                    time_in : time_in,
+                    date: dateToday,
+                    time_in : timeNow,
                     time_in_coordinates : time_in_coordinates,
                     time_out: time_out,
                     time_out_coordinates : time_out_coordinates
@@ -206,16 +213,17 @@ app.get("/retrieve-user-attendance", async(req, res)=> {
 
 app.put("/attendance-input-time-out", async(req, res) => {
 
-    const {user, time_out, time_out_coordinates} = req.body;
+    const {user, time_out_coordinates, assignedParcel} = req.body;
     const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
-    console.log(time_out)
-    
+    const dateNow =  new Date();
+    const timeNow = new Date().toLocaleString('en-us',{hour:'numeric', minute:'numeric', second:'numeric', timeZone:'Asia/Manila'});
+
     try {
         const userEmail = user;
         await Attendance.findOneAndUpdate({user: userEmail, "attendance.date": dateToday},{
             
             $set: { 
-                "attendance.$.time_out" : time_out,
+                "attendance.$.time_out" : timeNow,
                 "attendance.$.time_out_coordinates" : 
                     {
                         latitude : time_out_coordinates.latitude,
@@ -224,6 +232,13 @@ app.put("/attendance-input-time-out", async(req, res) => {
                 }
 
         });
+
+        await AssignedParcel.create({
+            user: userEmail,
+            date: dateToday,
+            w_date: dateNow,
+            assigned_parcel_count: assignedParcel
+        })
         res.send({status: 200, data:"Attendance Created"})
     } catch (error) {
         res.send({ status: "error", data: error});
@@ -232,9 +247,10 @@ app.put("/attendance-input-time-out", async(req, res) => {
 
 
 app.put("/parcel-input", async(req, res) => {
-    const dataSet = {user, date, parcel_count, parcel_type} = req.body;
+    const dataSet = {user, parcel_count, parcel_type} = req.body;
 
     const dateNow =  new Date();
+    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
 
     console.log(req.body)
 
@@ -245,7 +261,7 @@ app.put("/parcel-input", async(req, res) => {
         $addToSet: {
             parcel: {
                 parcel_count : parcel_count,
-                date : date,
+                date : dateToday,
                 parcel_type : parcel_type,
                 w_date : dateNow
             }
@@ -322,6 +338,17 @@ app.post("/retrieve-user-attendance-today", async(req, res)=> {
          }  
         },
         {
+          '$lookup' : {
+              from: "users",
+              localField: "_id",
+              foreignField: "email",
+              as: "user_details"
+          }
+        },
+        {
+            $replaceRoot: {newRoot: { $mergeObjects: [{ $arrayElemAt: ["$user_details", 0]}, "$$ROOT" ]}}
+        },
+        {
          '$project': {
             'user' : '$_id',
             'dateSeparate' : '$date',
@@ -330,12 +357,17 @@ app.post("/retrieve-user-attendance-today", async(req, res)=> {
             'timeOut' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeOut", "no record"]},
             'timeOutCoordinates' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeOutCoordinates", "no record"]},
             'email' : '$user',
+            'first_name' : "$first_name",
+            'middle_name' : "$middle_name",
+            'last_name' : "$last_name",
             
             
          } 
         },
           {
-         '$sort' : {"user": 1}
+         '$sort' : {"first_name": 1,
+                    "last_name": 1
+         }
         },
 
         ])
@@ -352,46 +384,136 @@ app.post("/retrieve-user-attendance-today", async(req, res)=> {
 
 app.post("/export-attendance-data", async(req, res)=> {
 
-    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric'});
-    try {
-        console.log(dateToday)
-        const attendanceToday = await Attendance.aggregate([
-        {'$unwind' : "$attendance"},
-        // {
-        //  '$match' : {"date" : "5/13/2024"}
-        // },
-        {
-         '$group' : {
-            '_id' : "$user",
-            'date' : {'$last': "$attendance.date"} ,
-            'timeIn' : {'$last': "$attendance.time_in"} ,
-            'timeInCoordinates' : {'$last': "$attendance.time_in_coordinates"}, 
-            'timeOut' : {'$last': "$attendance.time_out"},
-            'timeOutCoordinates' : {'$last': "$attendance.time_out_coordinates"}, 
-         
-         }  
-        },
-        {
-         '$project': {
-            'user' : '$_id',
-            'dateSeparate' : '$date',
-            'timeIn' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeIn", "no record"]},
-            'timeInCoordinates' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeInCoordinates", "no record"]}, 
-            'timeOut' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeOut", "no record"]},
-            'timeOutCoordinates' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeOutCoordinates", "no record"]},
-            'email' : '$user',
-            
-            
-         } 
-        },
-          {
-         '$sort' : {"user": 1}
-        },
+    const { start, end } = req.body;
 
+    console.log(start , end)
+
+
+
+    try {
+       
+        const data = await Attendance.aggregate([
+            {
+             $unwind: "$attendance"
+            },{
+                $match: {
+                    $expr: {
+                        $and: [
+                            {$gte : [{$toLong: "$attendance.w_date"} ,  start]},
+                            {$lt : [{$toLong: "$attendance.w_date"} , end]}
+                        ]
+                    }
+                }
+            },
+            {
+                $lookup : {
+                    from: "users",
+                    localField: "user",
+                    foreignField: "email",
+                    as: "user_details"
+                }
+            },
+            {
+                $replaceRoot: {newRoot: { $mergeObjects: [{ $arrayElemAt: ["$user_details", 0]}, "$$ROOT" ]}}
+            },
+            {
+                $project: {
+                   'user' : '$email',
+                   'date' : '$attendance.date',
+                   'timeIn' : '$attendance.time_in',
+                   'timeOut' : '$attendance.time_out',
+                   'email' : '$user',
+                   'first_name' : "$first_name",
+                   'middle_name' : "$middle_name",
+                   'last_name' : "$last_name",
+                   
+                   
+                } 
+            }    
+        
         ])
+         
+        return res.send({ status: 200, data: data});
+        
+    } catch (error) {
+            return res.send({error: error});
+    }
+
+
+});
+
+
+app.post("/export-parcel-data", async(req, res)=> {
+
+    const { start, end } = req.body;
+
+
+    try {
        
-            return res.send({ status: 200, data: attendanceToday });
-       
+        const data = await Parcel.aggregate([
+            {
+             $unwind: "$parcel"
+            },{
+                $match: {
+                    $expr: {
+                        $and: [
+                            {$gte : [{$toLong: "$parcel.w_date"} ,  start]},
+                            {$lt : [{$toLong: "$parcel.w_date"} , end]}
+                        ]
+                    }
+                }
+            },
+            {
+                $group: {
+                    '_id' : '$parcel.date',
+                    'user' : {$first : '$user'},
+                    // 's_date' : {$first :'$parcel.date'},
+                    'count_bulk' : {
+                        $sum : { $cond :[ {$eq : ["$parcel.parcel_type", "Bulk"]}, 1 , 0]}
+                    },
+                    'count_non_bulk' : {
+                        $sum : { $cond :[ {$eq : ["$parcel.parcel_type", "Non-bulk"]}, 1 , 0]}
+                    }
+
+                }
+            },
+            {
+                $lookup:
+                 {
+                    from: "users",
+                    localField: "user",
+                    foreignField: "email",
+                    as: "user_details"
+                 }
+            },
+            {
+                $replaceRoot: {newRoot: { $mergeObjects: [{ $arrayElemAt: ["$user_details", 0]}, "$$ROOT" ]}}
+            },
+            {
+
+                $project: {
+                    'count_non_bulk' : 1,
+                    'count_bulk' : 1,
+                    'first_name' : "$first_name",
+                    'middle_name' : "$middle_name",
+                    'last_name' : "$last_name",
+                    'email' : "$email"
+                }
+
+            },
+            {
+                $sort: {
+                    'first_name' : 1,
+                    'last_name' : 1,
+                    '_id' : -1
+                }
+            }
+           
+        
+        ])
+         
+        return res.send({ status: 200, data: data});
+        
     } catch (error) {
             return res.send({error: error});
     }
@@ -461,32 +583,71 @@ app.post("/view-user-attendance", async(req, res)=> {
 
 app.post("/test-index", async(req, res)=> {
    
-    const { user } = req.body;
+    const { start, end } = req.body;
 
-    // var checkDate =new Date("2024-05-21T00:48:02.000+00:00");
-    var checkDate =new Date("2024-06-09T16:26:18.733Z");
-    const dateNow =  new Date();
-    var getget = checkDate.getTime();
-    
-    console.log(getget)
-    const userEmail = user;
 
     try {
        
-        const data = await Attendance.aggregate([
+        const data = await Parcel.aggregate([
             {
-             $unwind: "$attendance"
+             $unwind: "$parcel"
+            },{
+                $match: {
+                    $expr: {
+                        $and: [
+                            {$gte : [{$toLong: "$parcel.w_date"} ,  start]},
+                            {$lt : [{$toLong: "$parcel.w_date"} , end]}
+                        ]
+                    }
+                }
             },
             {
-             $project:{
-                user : 1,
-                date: "$attendance.date",
-                datePicker : {$eq :[{ $toLong :"$attendance.w_date"}, {$toLong : checkDate}]},
-                dateTest: { $toLong :"$attendance.w_date"}
-             }
+                $group: {
+                    '_id' : '$parcel.date',
+                    'user' : {$first : '$user'},
+                    // 's_date' : {$first :'$parcel.date'},
+                    'count_bulk' : {
+                        $sum : { $cond :[ {$eq : ["$parcel.parcel_type", "Bulk"]}, 1 , 0]}
+                    },
+                    'count_non_bulk' : {
+                        $sum : { $cond :[ {$eq : ["$parcel.parcel_type", "Non-bulk"]}, 1 , 0]}
+                    }
+
+                }
+            },
+            {
+                $lookup:
+                 {
+                    from: "users",
+                    localField: "user",
+                    foreignField: "email",
+                    as: "user_details"
+                 }
+            },
+            {
+                $replaceRoot: {newRoot: { $mergeObjects: [{ $arrayElemAt: ["$user_details", 0]}, "$$ROOT" ]}}
+            },
+            {
+
+                $project: {
+                    'count_non_bulk' : 1,
+                    'count_bulk' : 1,
+                    'first_name' : "$first_name",
+                    'middle_name' : "$middle_name",
+                    'last_name' : "$last_name",
+                    'email' : "$email"
+                }
+
+            },
+            {
+                $sort: {
+                    'first_name' : 1,
+                    'last_name' : 1
+                }
             }
+           
+        
         ])
-        // console.log(result);
          
         return res.send({ status: 200, data: data});
         
@@ -519,13 +680,52 @@ app.post("/retrieve-parcel-data", async(req, res)=> {
           },
         }
       },
+      {
+        '$lookup' : {
+            from: "users",
+            localField: "_id",
+            foreignField: "email",
+            as: "user_details"
+        }
+      },
+      {
+          $replaceRoot: {newRoot: { $mergeObjects: [{ $arrayElemAt: ["$user_details", 0]}, "$$ROOT" ]}}
+      },
+
+      {
+        '$lookup' : {
+            from: "assigned_parcels",
+            let: {select_user: "$_id", select_date: dateToday},
+            pipeline: [
+                { $match:
+                   { $expr: 
+                    { $and:[
+                        {$eq: ["$user", "$$select_user"]},
+                        {$eq: ["$date", "$$select_date"]},
+                     ]
+                    }
+                   }
+                },
+                // {$project: { user: 0, date: 0}}
+            ],
+            as: "total_assigned"
+        }
+      },
+      {
+        $replaceRoot: {newRoot: { $mergeObjects: [{ $arrayElemAt: ["$total_assigned", 0]}, "$$ROOT" ]}}
+      },
 
       {
         '$project': {
           'user': "$_id",
+          'first_name' : "$first_name",
+          'middle_name' : "$middle_name",
+          'last_name' : "$last_name",
           'count_bulk' : 1,
           'count_non_bulk' : 1,
-          '_id': 0
+          '_id': 0,
+          'assigned_parcel' : { '$ifNull': ["$assigned_parcel_count", "no data"]}
+
         }
       },
       {
@@ -742,13 +942,11 @@ app.post("/get-user-data-dashboard", async(req, res) => {
 
 app.listen(8082, () => {
     
-    const dateObj =  Date();
-    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone:'Asia/Manila'});
-    console.log(dateObj)
-    console.log(dateToday)
-    var checkDate =new Date("2024-06-09T17:09:15.937+00:00");
-    // const checker = checkDate.getMinutes();
-    // console.log(checker);
+  
+    var checkDate = moment(new Date());
+    var a = moment.tz("Asia/Manila").format(); 
+  
+    console.log(a);
 
     console.log("node js server started");
     console.log(process.env.email) 
