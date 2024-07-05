@@ -9,15 +9,17 @@ require('./AttendanceInput');
 require('./ParcelInput');
 require('./ParcelData'); 
 require('./AssignedParcel')
+require('./Hub');
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
-// var moment = require('moment');
 var moment = require('moment-timezone');
-
+var ObjectId = require('mongodb').ObjectId; 
+// import { ObjectId } from "mongodb";
 app.use(express.json());
 
 var cors = require('cors');
+const { pipeline } = require("nodemailer/lib/xoauth2");
 app.use(cors());
 
 
@@ -36,7 +38,9 @@ const ParcelInput = mongoose.model("parcelInput");
 
 const ParcelData = mongoose.model("parcelData");
 
-const AssignedParcel = mongoose.model("assignedParcel")
+const AssignedParcel = mongoose.model("assignedParcel");
+
+const Hub = mongoose.model("hubs")
 
 const JWT_SECRET = "asdfghjklzxcvbnmqwertyuiop";
 
@@ -78,7 +82,8 @@ app.post("/register-user-detail", async(req, res) => {
             address,
             password: encryptedPassword,
             isActivate: false,
-            j_date : dateNow
+            j_date : dateNow,
+            type : 1
         });
         await Attendance.create({
             user: email,
@@ -94,6 +99,7 @@ app.post("/register-user-detail", async(req, res) => {
     }
 });
 
+
 app.post("/login-user" , async(req, res) =>{
     const {email, password} = req.body;
     const oldUser = await User.findOne({ email : email });
@@ -101,6 +107,31 @@ app.post("/login-user" , async(req, res) =>{
     if(!oldUser) return res.send({status: 401, data: "Invalid email or password"});
 
     if(oldUser.isActivate === false) return res.send({status: 401, data: "User has not been activated yet."});
+    
+    if(await bcrypt.compare(password, oldUser.password)){
+        const token = jwt.sign({email: oldUser.email}, JWT_SECRET);
+        
+        if(res.status(201)){
+            return res.send({ status: 200, data: token, email: oldUser.email, first_name: oldUser.first_name, middle_name: oldUser.middle_name, last_name: oldUser.last_name, phone: oldUser.phone});
+        }else{
+            return res.send({ error: "error"});
+        }
+
+    }{
+        return res.send({status: 401, data: "Invalid user or password"});
+    }
+});
+
+
+app.post("/login-admin" , async(req, res) =>{
+    const {email, password} = req.body;
+    const oldUser = await User.findOne({ email : email });
+
+    if(!oldUser) return res.send({status: 401, data: "Invalid email or password"});
+
+    if(!oldUser.type === 2) return res.send({status: 401, data: "Invalid User ."});
+
+    if(oldUser.isActivate === false) return res.send({status: 401, data: "User is already deactivated yet."});
     
     if(await bcrypt.compare(password, oldUser.password)){
         const token = jwt.sign({email: oldUser.email}, JWT_SECRET);
@@ -130,6 +161,37 @@ app.put("/update-status", async(req, res) => {
 
 });
 
+app.put("/update-user-hub", async(req, res) => {
+    const {hub_id, email} = req.body;
+
+    const userEmail = email;
+    console.log(userEmail);
+    try{
+        await User.findOneAndUpdate({email: userEmail}, {$set: {hub_id: hub_id}});
+        res.send({status: 200, data:"Hub updated"})
+    } catch(error){
+        res.send({status: "errorr", data: error});
+    }
+
+});
+
+
+app.put("/update-hub-status", async(req, res) => {
+    const {isActivate, id} = req.body;
+    
+
+  
+   
+    try{
+        await Hub.findByIdAndUpdate( id, {isActive: isActivate});
+    
+        res.send({status: 200, data:"Status updated"})
+    } catch(error){
+        res.send({status: "errorr", data: error});
+    }
+
+});
+
 app.post("/user-data", async(req, res)=> {
     const {token} = req.body;
 
@@ -146,14 +208,97 @@ app.post("/user-data", async(req, res)=> {
 
 });
 
-app.post("/get-all-user", async(req, res)=> {
+app.post("/get-rider-user", async(req, res)=> {
    
 
     try {
 
-        User.find().then((data)=>{
-            return res.send({ status: 200, data: data });
-        })
+        const data = await User.aggregate([
+            
+            {
+                $match: {
+                        type : 1                   
+                }
+            },
+            {
+              $lookup :
+                        {
+                         from : "hubs",
+                         let : {
+                            hubId : "$hub_id"
+                         },
+                         pipeline: [
+                            {  
+                                $match: {
+                                    $expr: {
+                                        $eq: [
+                                            {"$toString" : "$_id"},
+                                            "$$hubId"
+                                        ]
+                                    }
+                                  }  
+                            }
+                        ],
+                         as: "hub_details"
+                        }
+            },
+            {
+                $project: {
+                    "first_name" : 1,
+                    "middle_name" : 1,
+                    "last_name" : 1,
+                    "email" : 1,
+                    "phone" : 1,
+                    "address" : 1,
+                    "isActivate" : 1,
+                    "hub_id" : 1,
+                    "j_date" : 1,
+                    "hub_name" : "$hub_details.hub_name"
+                }
+            }
+              
+          
+        ])
+            
+        return res.send({ status: 200, data: data});
+    
+    } catch (error) {
+            return res.send({error: error});
+    }
+
+});
+
+
+app.post("/get-admin-user", async(req, res)=> {
+   
+
+    try {
+
+        const data = await User.aggregate([
+            
+            {
+                $match: {
+                        type : 2                
+                }
+            },
+            {
+                $project: {
+                    "first_name" : 1,
+                    "middle_name" : 1,
+                    "last_name" : 1,
+                    "email" : 1,
+                    "phone" : 1,
+                    "address" : 1,
+                    "isActivate" : 1,
+                    "j_date" : 1,
+                }
+            }
+              
+          
+        ])
+            
+        return res.send({ status: 200, data: data});
+    
     } catch (error) {
             return res.send({error: error});
     }
@@ -316,6 +461,66 @@ app.post("/retrieve-parcel-input", async (req, res) => {
 });
 
 
+app.post("/fetch-hub", async (req, res) => {
+  
+
+    try {
+           const hubData =  await Hub.find()
+        return res.send({ status: 200, data: hubData });
+    } catch (error) {
+      
+        console.error("Error retrieving hub data:", error);
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+
+app.post("/create-hub", async(req, res) => {
+    const {hub_name, address, region, coordinates} = req.body;
+
+    const dateNow =  new Date();
+
+    const oldHub = await Hub.findOne({hub_name: hub_name});
+    
+    if (oldHub) return res.send({data:"Hub already exist!"});
+
+    try {
+        await Hub.create({
+            w_date : dateNow,
+            hub_name,
+            region,
+            address,
+            isActive: true,
+            coordinates,
+        });
+      
+        res.send({status: 200, data:"Hub Created"})
+    } catch (error) {
+        res.send({ status: "error", data: error});
+    }
+}); 
+
+
+app.post("/edit-hub", async(req, res) => {
+    const {id, hub_name, address, region, coordinates} = req.body;
+
+    try {
+        await Hub.findByIdAndUpdate(id,
+            {
+            hub_name,
+            region,
+            address,
+            coordinates,
+        });
+      
+        res.send({status: 200, data:"Hub Updated"})
+    } catch (error) {
+        res.send({ status: "error", data: error});
+    }
+}); 
+
+
+
 app.post("/retrieve-user-attendance-today", async(req, res)=> {
 
     const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
@@ -323,9 +528,7 @@ app.post("/retrieve-user-attendance-today", async(req, res)=> {
         console.log(dateToday)
         const attendanceToday = await Attendance.aggregate([
         {'$unwind' : "$attendance"},
-        // {
-        //  '$match' : {"date" : "5/13/2024"}
-        // },
+      
         {
          '$group' : {
             '_id' : "$user",
@@ -347,6 +550,15 @@ app.post("/retrieve-user-attendance-today", async(req, res)=> {
         },
         {
             $replaceRoot: {newRoot: { $mergeObjects: [{ $arrayElemAt: ["$user_details", 0]}, "$$ROOT" ]}}
+        },
+        {
+            $redact: {
+                $cond : {
+                    if: { $eq: ['$isActivate' , true]},
+                    then: "$$DESCEND",
+                    else: "$$PRUNE"
+                }
+            }
         },
         {
          '$project': {
@@ -812,7 +1024,6 @@ app.post("/send-otp-register", async(req, res)=> {
     if (oldUser) return res.send({data:"User already exist!"});
 
     try {
-    //   await sendMail(transporter, info);
 
         var code = Math.floor(100000 + Math.random() * 900000);   
         code = String(code);
@@ -822,17 +1033,16 @@ app.post("/send-otp-register", async(req, res)=> {
         from: {
             name: "BMPower",
             address: process.env.Email
-        }, // sender address
-        to: email, // list of receivers
-        subject: "OTP code", // Subject line
-        html: "<b>Your OTP code is</b> " + code + "<b>. Do not share this code with others.</b>", // html body
+        }, 
+        to: email, 
+        subject: "OTP code", 
+        html: "<b>Your OTP code is</b> " + code + "<b>. Do not share this code with others.</b>", 
 
     });
         return res.send({status : 200, data: info, email: email, code: code});
     } catch (error) {
         
             return res.send({error: error});
-            // return res.send({data: data});
     }
 
 });
@@ -843,10 +1053,9 @@ app.post("/send-otp-forgot-password", async(req, res)=> {
 
     const oldUser = await User.findOne({email:email});
     
-    if (!oldUser) return res.send({data:"User doesn't exist!"});
+    if (!oldUser) return res.send({status:422, data:"User doesn't exist!"});
 
     try {
-    //   await sendMail(transporter, info);
 
         var code = Math.floor(100000 + Math.random() * 900000);   
         code = String(code);
@@ -858,16 +1067,15 @@ app.post("/send-otp-forgot-password", async(req, res)=> {
             address: process.env.Email
         }, 
         to: email, 
-        subject: "OTP code", 
-        text: "Hello world?", 
-        html: "<b>Your OTP code is</b> " + code + "<b>. Do not share this code with others.</b>", // html body
+        subject: "OTP code",
+        html: "<b>Your OTP code is</b> " + code + "<b>. Do not share this code with others.</b>",
 
     });
         return res.send({status : 200, data: info, email: email, code: code});
     } catch (error) {
         
             return res.send({error: error});
-            // return res.send({data: data});
+           
     }
 
 });
@@ -887,6 +1095,38 @@ app.put("/forgot-password-reset", async(req, res) => {
         res.send({status: "error", data: error});
     }
 
+});
+
+
+app.post("/register-user-admin", async(req, res) => {
+    const {first_name, middle_name, last_name, email, phone, address, password} = req.body;
+    const encryptedPassword = await bcrypt.hash(password, 8);
+
+    const oldUser = await User.findOne({email:email});
+
+    const dateNow =  new Date();
+    
+    if (oldUser) return res.send({data:"User already exist!"});
+
+
+
+    try {
+        await User.create({
+            first_name,
+            middle_name,
+            last_name,
+            email,
+            phone,
+            address,
+            password: encryptedPassword,
+            isActivate: false,
+            j_date : dateNow,
+            type : 2
+        });
+        res.send({status: 200, data:"User Created"})
+    } catch (error) {
+        res.send({ status: "error", data: error});
+    }
 });
 
 app.post("/get-user-data-dashboard", async(req, res) => {
@@ -936,6 +1176,46 @@ app.post("/get-user-data-dashboard", async(req, res) => {
     } catch (error) {
                 return res.send({error: error});
         }
+
+});
+
+
+app.post("/update-all-user-type", async(req, res) => {
+    try{
+    const updateData  = await User.updateMany(
+        { 
+
+        },
+        {
+        $set: { type: 1
+        }
+    });
+    return res.status(200).json({ status: 200, data: updateData });
+
+  } catch (error) {
+    return res.send({error: error});
+}
+
+
+});
+
+
+app.post("/update-all-hub", async(req, res) => {
+    try{
+    const updateData  = await User.updateMany(
+        { 
+
+        },
+        {
+        $set: { hub_id: ""
+        }
+    });
+    return res.status(200).json({ status: 200, data: updateData });
+
+  } catch (error) {
+    return res.send({error: error});
+}
+
 
 });
 
