@@ -551,13 +551,10 @@ app.post("/retrieve-user-attendance-today", async(req, res)=> {
         {
             $replaceRoot: {newRoot: { $mergeObjects: [{ $arrayElemAt: ["$user_details", 0]}, "$$ROOT" ]}}
         },
+
         {
-            $redact: {
-                $cond : {
-                    if: { $eq: ['$isActivate' , true]},
-                    then: "$$DESCEND",
-                    else: "$$PRUNE"
-                }
+            $match:{
+                "isActivate" : true
             }
         },
         {
@@ -565,7 +562,7 @@ app.post("/retrieve-user-attendance-today", async(req, res)=> {
             'user' : '$_id',
             'dateSeparate' : '$date',
             'timeIn' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeIn", "no record"]},
-            'timeInCoordinates' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeInCoordinates", "no record"]}, 
+            'timeInCoordinates' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeOutCoordinates.latitude", "no record"]}, 
             'timeOut' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeOut", "no record"]},
             'timeOutCoordinates' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeOutCoordinates", "no record"]},
             'email' : '$user',
