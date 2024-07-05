@@ -12,7 +12,9 @@ const UserDetailSchema = new mongoose.Schema({
     address: String,
     password: String,
     isActivate: Boolean,
-    j_date : Date
+    j_date : Date,
+    hub_id : String,
+    type: Number
 },{
     collection:"users"
 });
