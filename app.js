@@ -1,3 +1,11 @@
+
+const BUCKET = process.env.BUCKET;
+
+// AWS.config.update({region:'us-east-1'});
+
+
+const {memoryStorage} =  require("multer");
+const multer = require("multer");
 const express = require("express");
 const app = express();
 const mongoose = require("mongoose");
@@ -14,17 +22,19 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 var moment = require('moment-timezone');
-var ObjectId = require('mongodb').ObjectId; 
-// import { ObjectId } from "mongodb";
 app.use(express.json());
 
 var cors = require('cors');
 const { pipeline } = require("nodemailer/lib/xoauth2");
+const { s3UploadReceipt, s3UploadScreenshot } = require('./s3');
+// const { uploadToS3 } = require("./s3");
+const storage = multer.memoryStorage();
+const upload = multer({storage});
 app.use(cors());
 
 
-const mongoURI = "mongodb+srv://ecbajanbmphrc:EvqZlwFpXxeA6T6i@rmaproductionserverless.phmnjem.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=rmaProductionServerless";
-// const mongoURI = "mongodb+srv://ecbajanbmphrc:y7eIFXEbU07QQOln@cluster0.5tjfmk7.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=Cluster0";
+// const mongoURI = "mongodb+srv://ecbajanbmphrc:EvqZlwFpXxeA6T6i@rmaproductionserverless.phmnjem.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=rmaProductionServerless";
+const mongoURI = "mongodb+srv://ecbajanbmphrc:y7eIFXEbU07QQOln@cluster0.5tjfmk7.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=Cluster0";
 
 const User = mongoose.model("users");
 
@@ -112,7 +122,8 @@ app.post("/login-user" , async(req, res) =>{
         const token = jwt.sign({email: oldUser.email}, JWT_SECRET);
         
         if(res.status(201)){
-            return res.send({ status: 200, data: token, email: oldUser.email, first_name: oldUser.first_name, middle_name: oldUser.middle_name, last_name: oldUser.last_name, phone: oldUser.phone});
+
+            return res.send({ status: 200, data: token, email: oldUser.email, first_name: oldUser.first_name, middle_name: oldUser.middle_name, last_name: oldUser.last_name, phone: oldUser.phone, id : oldUser._id.toString()});
         }else{
             return res.send({ error: "error"});
         }
@@ -178,9 +189,6 @@ app.put("/update-user-hub", async(req, res) => {
 
 app.put("/update-hub-status", async(req, res) => {
     const {isActivate, id} = req.body;
-    
-
-  
    
     try{
         await Hub.findByIdAndUpdate( id, {isActive: isActivate});
@@ -391,41 +399,205 @@ app.put("/attendance-input-time-out", async(req, res) => {
 });
 
 
-app.put("/parcel-input", async(req, res) => {
-    const dataSet = {user, parcel_count, parcel_type} = req.body;
+// app.post("/parcel-input", upload.single("file"), async(req, res) => {
+//     const user = req.body.user;
+//     const email = req.body.email;
+//     const parcel_non_bulk_count = req.body.parcel_non_bulk_count;
+//     const parcel_bulk_count = req.body.parcel_bulk_count;
+//     const assigned_parcel_count = req.body.assigned_parcel_count;
+//     const dateNow =  Date.parse(new Date());
+//     const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
+//     let receiptArr = [];
+//     var x = 1;
 
-    const dateNow =  new Date();
-    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
+//     const bucketName = 'rmaimage';
+  
+//    try{
+//     if (Array.isArray(req.body.myFile)){
+//     req.body.myFile.forEach(async function (item, index) {
+//         const bufferImg = Buffer.from(item,  'base64');
+//         let mor = '';
 
-    console.log(req.body)
+//         const params = {
+//             Bucket: bucketName,
+//             Key:  "receipt/"+"id?/" +user+ "/" + "r"+dateNow + index+".jpg",
+//             Body: bufferImg
+//         }
 
-    try {
-        const userEmail = user;
-        await ParcelInput.findOneAndUpdate({user: userEmail},{
-         
-        $addToSet: {
-            parcel: {
-                parcel_count : parcel_count,
-                date : dateToday,
-                parcel_type : parcel_type,
-                w_date : dateNow
-            }
-         }
+        
+
+//         const imgData = s3.upload(params, (err, data) => {
+//             let y = "wa";
+//             if (err){
+//                 console.log(err)
+//                 return
+//             }
+//             if(data){
+//                 // console.log(data)
+//                 mor = y
+//                 return data.Location
+//             }
+           
+//         });
+      
+//         receiptArr.push("https://rmaimage.s3.ap-southeast-2.amazonaws.com/receipt/"+"id%3F/" +user+ "/" + "r"+dateNow + index+".jpg")
+        
+//         // receiptArr.push(imgData);
+
+  
+
+//     }) 
+
+//     }else{
+
+
+//         const buf = Buffer.from(req.body.myFile, 'base64');
+//         const params = {
+//             Bucket: bucketName,
+//             Key: "receipt/"+"id?/" +user+ "/" + "r"+dateNow +"0.jpg",
+//             Body: buf
+//         }
+
+//         s3.upload(params, (err, data) => {
+//             if (err){
+//                 console.log(err)
+//             }
+    
+//             if(data){
+//                 receiptArr.push(data.Location);
+//             }
+//         })  
+//      }
+    
+
+
+//         await ParcelInput.findOneAndUpdate({user: email},{
+//         $addToSet: {
+//             parcel: {
+//                 parcel_non_bulk_count : parcel_non_bulk_count,
+//                 parcel_bulk_count: parcel_bulk_count,
+//                 assigned_parcel_count: assigned_parcel_count,
+//                 receipt : receiptArr,
+//                 date : dateToday,
+//                 w_date : dateNow
+//             }
+//          }
             
-        });
-        res.send({status: 200, data:"Parcel added", dataSet: dataSet})
-    } catch (error) {
-        res.send({ status: "error", data: error});
+//         });
+//         res.send({status: 200, data:"Parcel added", dataSet: dataSet})
+//     }  catch (error) {
+//             res.send({ status: "error", data: error});
+//     }
+
+
+    // s3.upload(params, (err, data) => {
+    //     if (err){
+    //         console.log(err)
+    //     }
+
+    //     if(data){
+    //         console.log("success")
+    //     }
+    // })
+
+    
+    
+
+
+    // const uploadToS3 = async ({file}) => {
+    //     const key = "id1";
+    //     const command = new PutObjectCommand({
+    //      Bucket: BUCKET,
+    //      Key: key,
+    //      Body: file,
+    //      ContentType: "jpeg",
+    //     });
+     
+    //     try {
+    //      await s3.send(command);
+    //      return { key };
+    //     }catch (error){
+    //      console.log(error);
+    //      return {error};
+    //     }
+    //  };
+
+    //  const {error, key} = uploadToS3(buf);
+
+
+    // try {
+    //     const userEmail = user;
+    //     await ParcelInput.findOneAndUpdate({user: userEmail},{
+         
+    //     $addToSet: {
+    //         parcel: {
+    //             parcel_non_bulk_count,
+    //             parcel_bulk_count,
+    //             assigned_parcel_count,
+    //             receipt,
+    //             date : dateToday,
+    //             w_date : dateNow
+    //         }
+    //      }
+            
+    //     });
+    //     res.send({status: 200, data:"Parcel added", dataSet: dataSet})
+    // } catch (error) {
+    //     res.send({ status: "error", data: error});
+    // }
+// });
+app.post("/parcel-input", upload.array("file"), async(req, res) => {
+    
+  try{
+
+        const weekNow = moment.tz("Asia/Manila").week(); 
+        var weekDayName =  moment().tz("Asia/Manila").format('dddd');
+        const dateNow =  Date.parse(new Date());
+        const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
+        const file = req.body;
+        const receiptResult = await s3UploadReceipt(file);
+        const screenshotResult = await s3UploadScreenshot(file);
+        if(receiptResult.statusCode === 200 && screenshotResult.statusCode === 200) {
+
+            await ParcelInput.findOneAndUpdate({user: file.email},{
+         
+                    $addToSet: {
+                        parcel: {
+                            parcel_non_bulk_count: parseInt(file.parcel_non_bulk_count),
+                            parcel_bulk_count: parseInt(file.parcel_bulk_count),
+                            assigned_parcel_count: parseInt(file.assigned_parcel_count),
+                            total_parcel: parseInt(file.total_parcel),
+                            remaining_parcel: parseInt(file.remaining_parcel),
+                            screenshot: screenshotResult.url,
+                            receipt: receiptResult.url,
+                            date : dateToday,
+                            weekday : weekDayName,
+                            weekNumber : weekNow,
+                            w_date : dateNow
+                        }
+                     }
+                        
+                    });
+
+           res.send({ status: 200, data: "success eyy", receiptResult});
+        }
+      
+    }catch(error){
+        console.log(error)
+        res.send({ status: "error", data: error})
     }
 });
 
 
 
-
 app.post("/retrieve-parcel-input", async (req, res) => {
-    const { user, date } = req.body;
+    const { user } = req.body;
 
-    const selectDate = date;
+  
+
+    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
+    const weekNow = moment.tz("Asia/Manila").week(); 
+    const weekDayName =  moment().tz("Asia/Manila").format('dddd');
 
     try {
         console.log("Searching for parcels for user:", user);
@@ -442,9 +614,14 @@ app.post("/retrieve-parcel-input", async (req, res) => {
                         $filter: {
                             input: "$parcel",
                             as: "parcel",
-                            cond: { $eq: ["$$parcel.date", selectDate] }
+                            cond: { $eq: ["$$parcel.weekNumber", weekNow] }
                         }
                     }
+                }
+            },
+            {
+                $sort:{
+                    w_date: 1
                 }
             }
         ]);
@@ -452,7 +629,7 @@ app.post("/retrieve-parcel-input", async (req, res) => {
         console.log("Found parcels:", parcels);
 
      
-        return res.status(200).json({ status: 200, data: parcels });
+        return res.status(200).json({ status: 200, data: parcels, weekday: weekDayName });
     } catch (error) {
       
         console.error("Error retrieving parcel data:", error);
@@ -1130,7 +1307,7 @@ app.post("/get-user-data-dashboard", async(req, res) => {
 
     const {email} = req.body;
 
-    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
+    var week = moment.tz("Asia/Manila").week(); 
      
 
     try {
@@ -1140,26 +1317,24 @@ app.post("/get-user-data-dashboard", async(req, res) => {
 
       {
         '$group': {
-         '_id': "$user",
-          'count_bulk': {
-            '$sum': { '$cond' : [ {'$and' :[{ '$eq': ["$parcel.parcel_type" , "Bulk"]},
-                                            { '$eq': ["$parcel.date" , dateToday]}]}, 1, 0] }
-          },
-          'count_non_bulk': {
-            '$sum': { '$cond' : [ {'$and' :[{ '$eq': ["$parcel.parcel_type" , "Non-bulk"]},
-                                            { '$eq': ["$parcel.date" , dateToday]}]}, 1, 0] }
-          },
-        }
+         '_id': {weekNumber : "$parcel.weekNumber"},
+         'parcel_non_bulk_count' : {'$sum': {'$sum' : "$parcel.parcel_non_bulk_count"}},
+         'parcel_bulk_count' : {'$sum': {'$sum' : "$parcel.parcel_bulk_count"}},
+         'total_parcel' : {'$sum': {'$sum' : "$parcel.total_parcel"}}
+           },
       },
-
       {
         '$project': {
-          'user': "$_id",
-          'count_bulk' : 1,
-          'count_non_bulk' : 1,
+          'week': "$_id",
+          'parcel_non_bulk_count' : "$parcel_non_bulk_count",
+          'parcel_bulk_count' : "$parcel_bulk_count",
+          'total_parcel' : "$total_parcel",
           '_id': 0
         }
       },
+    {
+        '$match' : {"week.weekNumber" : week}
+    },
       {
         '$sort':{
             'user' : 1
@@ -1220,11 +1395,12 @@ app.post("/update-all-hub", async(req, res) => {
 app.listen(8082, () => {
     
   
-    var checkDate = moment(new Date());
-    var a = moment.tz("Asia/Manila").format(); 
-  
-    console.log(a);
+    var checkDate = moment(new Date()).week();
+    const dateToday = new Date().toLocaleString('en-us',{weekday: 'narrow', timeZone:'Asia/Manila'});
+    var a = moment.tz("Asia/Manila").week(); 
+    var weekDayName =  moment().tz("Asia/Manila").format('dddd');
 
+    console.log(weekDayName);
     console.log("node js server started");
     console.log(process.env.email) 
 
