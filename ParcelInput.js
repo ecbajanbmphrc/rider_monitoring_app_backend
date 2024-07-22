@@ -2,9 +2,16 @@ const mongoose = require("mongoose");
 
 const ParcelInputSchema = new mongoose.Schema({
     parcel: Array,
-    parcel_count: String,
+    parcel_non_bulk_count: Number,
+    parcel_bulk_count: Number,
+    assigned_parcel_count: Number,
+    total_parcel : Number,
+    remaining_parcel: Number,
+    screenshot: String,
+    receipt : Array,
     date: String,
-    parcel_type: String,
+    weekday : String,
+    weekNumber : Number,
     w_date : Date
 
 },{
