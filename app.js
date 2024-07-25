@@ -1342,8 +1342,27 @@ app.post("/get-user-data-dashboard", async(req, res) => {
       }
     ]);
 
+
+    const userParcelPerDay = await Parcel.aggregate([
+        { '$match': {'user' : email}},
+        { '$unwind': "$parcel" },
+        {'$match': {'parcel.weekNumber' : week}},
+        {'$group': {
+            _id: "$parcel.weekday",
+            parcel: {"$addToSet" : "$parcel.total_parcel"}
+            }
+        },
+        {
+         '$project': {
+            '_id' : 1,
+            'parcel' : 1
+         }
+        }
+
+    ]);
+
     console.log("Found parcels:", userParcel);
-    return res.status(200).json({ status: 200, data: userParcel });
+    return res.status(200).json({ status: 200, data: userParcel, userParcelPerDay: userParcelPerDay });
 
     } catch (error) {
                 return res.send({error: error});
