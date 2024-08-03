@@ -700,68 +700,76 @@ app.post("/edit-hub", async(req, res) => {
 
 app.post("/retrieve-user-attendance-today", async(req, res)=> {
 
-    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
+    const {selectDate} = req.body;
+
     try {
-        console.log(dateToday)
-        const attendanceToday = await Attendance.aggregate([
-        {'$unwind' : "$attendance"},
-      
-        {
-         '$group' : {
-            '_id' : "$user",
-            'date' : {'$last': "$attendance.date"} ,
-            'timeIn' : {'$last': "$attendance.time_in"} ,
-            'timeInCoordinates' : {'$last': "$attendance.time_in_coordinates"}, 
-            'timeOut' : {'$last': "$attendance.time_out"},
-            'timeOutCoordinates' : {'$last': "$attendance.time_out_coordinates"}, 
-         
-         }  
-        },
-        {
-          '$lookup' : {
-              from: "users",
-              localField: "_id",
-              foreignField: "email",
-              as: "user_details"
-          }
-        },
-        {
-            $replaceRoot: {newRoot: { $mergeObjects: [{ $arrayElemAt: ["$user_details", 0]}, "$$ROOT" ]}}
-        },
+    const attendanceToday = await User.aggregate([
 
-        {
-            $match:{
-                "isActivate" : true
-            }
-        },
-        {
-         '$project': {
-            'user' : '$_id',
-            'dateSeparate' : '$date',
-            'timeIn' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeIn", "no record"]},
-            'timeInCoordinates' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeInCoordinates", "no record"]}, 
-            'timeOut' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeOut", "no record"]},
-            'timeOutCoordinates' : { '$cond' : [ { '$eq' : ['$date' , dateToday]}, "$timeOutCoordinates", "no record"]},
-            'email' : '$user',
-            'first_name' : "$first_name",
-            'middle_name' : "$middle_name",
-            'last_name' : "$last_name",
-            
-            
-         } 
-        },
-          {
-         '$sort' : {"first_name": 1,
-                    "last_name": 1
-         }
-        },
+  
 
-        ])
-       
-            return res.send({ status: 200, data: attendanceToday });
-       
+    {
+        '$match' : {'$expr' :{ '$and' :[ {'$eq' : ['$isActivate' , true]} 
+        // , { '$eq' : ['$type' , 1]}
+    ]
+            } 
+        }
+    },
+
+    {
+      '$lookup' : {
+        "from": "attendances",
+        "let" : {
+            "email" : "$email"
+        },
+        'pipeline' : [{
+            '$match' : { 
+                '$expr' :{
+                    '$eq' :
+                        ['$user' , "$$email"]
+            }}
+          },
+
+          { '$unwind': "$attendance" },
+          { '$match' : {'attendance.date' : selectDate}},
+
+        ],
+        'as': "attendance_info"
+      }  
+    },
+
+    {
+          '$replaceRoot': {'newRoot': { '$mergeObjects': [{ '$arrayElemAt': ["$attendance_info", 0]}, "$$ROOT" ]}}
+    },
+
+    {
+        '$project' : 
+        {
+            'date' : 1,
+            'first_name' : 1,
+            'middle_name' : 1,
+            'last_name' : 1,
+            'email' : 1,
+            'timeIn' : {'$ifNull' : ["$attendance.time_in" , "no record" ]},
+            'timeInCoordinates' : {'$ifNull' : ["$attendance.time_in_coordinates" , "no record" ]},
+            'timeOut' : {'$ifNull' : ["$attendance.time_out" , "no record" ]},
+            'timeOutCoordinates' : {'$ifNull' : ["$attendance.time_out_coordinates" , "no record" ]},
+            '_id' : 0
+        }
+    },
+
+     
+      {
+        '$sort':{
+            'last_name' : 1
+        }
+      }
+    ]);
+
+    console.log("Found parcels:", selectDate);
+    return res.send({ status: 200, data: attendanceToday });
+
     } catch (error) {
-            return res.send({error: error});
+                return res.send({error: error});
     }
 
 
@@ -850,20 +858,6 @@ app.post("/export-parcel-data", async(req, res)=> {
                 }
             },
             {
-                $group: {
-                    '_id' : '$parcel.date',
-                    'user' : {$first : '$user'},
-                    // 's_date' : {$first :'$parcel.date'},
-                    'count_bulk' : {
-                        $sum : { $cond :[ {$eq : ["$parcel.parcel_type", "Bulk"]}, 1 , 0]}
-                    },
-                    'count_non_bulk' : {
-                        $sum : { $cond :[ {$eq : ["$parcel.parcel_type", "Non-bulk"]}, 1 , 0]}
-                    }
-
-                }
-            },
-            {
                 $lookup:
                  {
                     from: "users",
@@ -883,7 +877,13 @@ app.post("/export-parcel-data", async(req, res)=> {
                     'first_name' : "$first_name",
                     'middle_name' : "$middle_name",
                     'last_name' : "$last_name",
-                    'email' : "$email"
+                    'email' : "$email",
+                    'date': "$parcel.date",
+                    'count_bulk': "$parcel.parcel_bulk_count",
+                    'count_non_bulk': "$parcel.parcel_non_bulk_count",
+                    'count_total_parcel': "$parcel.total_parcel",
+                    'assigned_parcel_count': "$parcel.assigned_parcel_count",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+                    '_id' : 0,
                 }
 
             },
@@ -1047,81 +1047,74 @@ app.post("/test-index", async(req, res)=> {
 
 app.post("/retrieve-parcel-data", async(req, res)=> {
 
-    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
+    // const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
+
+    const {selectDate} = req.body;
 
     try {
-    const parcelPerUser = await Parcel.aggregate([
-      { '$unwind': "$parcel" },
+    const parcelPerUser = await User.aggregate([
+  
 
-      {
-        '$group': {
-         '_id': "$user",
-          'count_bulk': {
-            '$sum': { '$cond' : [ {'$and' :[{ '$eq': ["$parcel.parcel_type" , "Bulk"]},
-                                            { '$eq': ["$parcel.date" , dateToday]}]}, 1, 0] }
+    {
+        '$match' : {'$expr' :{ '$and' :[ {'$eq' : ['$isActivate' , true]} 
+        // , { '$eq' : ['$type' , 1]}
+    ]
+            } 
+        }
+    },
+
+    {
+      '$lookup' : {
+        "from": "parcels",
+        "let" : {
+            "email" : "$email"
+        },
+        'pipeline' : [{
+            '$match' : { 
+                '$expr' :{
+                    '$eq' :
+                        ['$user' , "$$email"]
+            }}
           },
-          'count_non_bulk': {
-            '$sum': { '$cond' : [ {'$and' :[{ '$eq': ["$parcel.parcel_type" , "Non-bulk"]},
-                                            { '$eq': ["$parcel.date" , dateToday]}]}, 1, 0] }
-          },
-        }
-      },
-      {
-        '$lookup' : {
-            from: "users",
-            localField: "_id",
-            foreignField: "email",
-            as: "user_details"
-        }
-      },
-      {
-          $replaceRoot: {newRoot: { $mergeObjects: [{ $arrayElemAt: ["$user_details", 0]}, "$$ROOT" ]}}
-      },
 
-      {
-        '$lookup' : {
-            from: "assigned_parcels",
-            let: {select_user: "$_id", select_date: dateToday},
-            pipeline: [
-                { $match:
-                   { $expr: 
-                    { $and:[
-                        {$eq: ["$user", "$$select_user"]},
-                        {$eq: ["$date", "$$select_date"]},
-                     ]
-                    }
-                   }
-                },
-                // {$project: { user: 0, date: 0}}
-            ],
-            as: "total_assigned"
-        }
-      },
-      {
-        $replaceRoot: {newRoot: { $mergeObjects: [{ $arrayElemAt: ["$total_assigned", 0]}, "$$ROOT" ]}}
-      },
+          { '$unwind': "$parcel" },
+          { '$match' : {'parcel.date' : selectDate}},
 
-      {
-        '$project': {
-          'user': "$_id",
-          'first_name' : "$first_name",
-          'middle_name' : "$middle_name",
-          'last_name' : "$last_name",
-          'count_bulk' : 1,
-          'count_non_bulk' : 1,
-          '_id': 0,
-          'assigned_parcel' : { '$ifNull': ["$assigned_parcel_count", "no data"]}
+        ],
+        'as': "parcel_info"
+      }  
+    },
 
+    {
+          '$replaceRoot': {'newRoot': { '$mergeObjects': [{ '$arrayElemAt': ["$parcel_info", 0]}, "$$ROOT" ]}}
+    },
+
+    {
+        '$project' : 
+        {
+            'email' : 1,
+            'first_name' : 1,
+            'middle_name' : 1,
+            'last_name' : 1,
+            'count_non_bulk' : {'$ifNull' : ["$parcel.parcel_non_bulk_count" , "no record" ]},
+            'count_bulk' : {'$ifNull' : ["$parcel.parcel_bulk_count" , "no record" ]},
+            'count_total_parcel' : {'$ifNull' : ["$parcel.total_parcel" , "no record" ]},
+            'assigned_parcel_count' : {'$ifNull' : ["$parcel.assigned_parcel_count" , "no record" ]},
+            'screenshot' : {'$ifNull' : ["$parcel.screenshot" , "no record" ]},
+            'receipt' : {'$ifNull' : ["$parcel.receipt" , "no record" ]},
+            '_id' : 0
         }
-      },
+    },
+
+     
       {
         '$sort':{
-            'user' : 1
+            'last_name' : 1
         }
       }
     ]);
 
-    console.log("Found parcels:", parcelPerUser);
+    console.log("Found parcels:", selectDate);
     return res.status(200).json({ status: 200, data: parcelPerUser });
 
     } catch (error) {
@@ -1141,24 +1134,17 @@ app.post("/retrieve-user-parcel-data", async(req, res)=> {
       {'$match' : {'user' : userEmail }},
       { '$unwind': "$parcel" },
 
-      {
-        '$group': {
-         '_id': '$parcel.date',
-          'count_bulk': {
-            '$sum': { '$cond' : [ {'$and' :[{ '$eq': ["$parcel.parcel_type" , "Bulk"]}]}, 1, 0] }
-          },
-          'count_non_bulk': {
-            '$sum': { '$cond' : [ {'$and' :[{ '$eq': ["$parcel.parcel_type" , "Non-bulk"]}]}, 1, 0] }
-          },
-        }
-      },
 
       {
         '$project': {
-          'date': "$_id",
-          'count_bulk' : 1,
-          'count_non_bulk' : 1,
-          '_id': 0
+          'date': "$parcel.date",
+          'count_bulk': "$parcel.parcel_bulk_count",
+          'count_non_bulk': "$parcel.parcel_non_bulk_count",
+          'count_total_parcel': "$parcel.total_parcel",
+          'assigned_parcel_count': "$parcel.assigned_parcel_count",
+          'screenshot': "$parcel.screenshot",
+          'receipt': "$parcel.receipt",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+          '_id' : 0,
         }
       },
       { 
@@ -1180,7 +1166,7 @@ const transporter = nodemailer.createTransport({
     service: 'gmail',
     host: "smtp.gmail.com",
     port: 465,
-    secure: true, // Use `true` for port 465, `false` for all other ports
+    secure: true, 
     auth: {
       user: process.env.Email,
       pass: process.env.Pass,
