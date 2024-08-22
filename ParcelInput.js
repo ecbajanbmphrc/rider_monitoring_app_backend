@@ -2,10 +2,12 @@ const mongoose = require("mongoose");
 
 const ParcelInputSchema = new mongoose.Schema({
     parcel: Array,
-    parcel_non_bulk_count: Number,
-    parcel_bulk_count: Number,
-    assigned_parcel_count: Number,
-    total_parcel : Number,
+    assigned_parcel_non_bulk_count: Number,
+    assigned_parcel_bulk_count: Number,
+    assigned_parcel_total: Number,
+    delivered_parcel_non_bulk_count: Number,
+    delivered_parcel_bulk_count: Number,
+    delivered_parcel_total: Number,
     remaining_parcel: Number,
     screenshot: String,
     receipt : Array,
