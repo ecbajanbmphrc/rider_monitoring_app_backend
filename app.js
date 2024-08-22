@@ -29,7 +29,11 @@ const { pipeline } = require("nodemailer/lib/xoauth2");
 const { s3UploadReceipt, s3UploadScreenshot } = require('./s3');
 // const { uploadToS3 } = require("./s3");
 const storage = multer.memoryStorage();
-const upload = multer({storage});
+// const upload = multer({storage});
+const upload = multer({
+    storage:storage,
+    limits:  {fieldSize : 25 * 1024 * 1024}
+});
 app.use(cors());
 
 
@@ -122,8 +126,8 @@ app.post("/login-user" , async(req, res) =>{
         const token = jwt.sign({email: oldUser.email}, JWT_SECRET);
         
         if(res.status(201)){
-
-            return res.send({ status: 200, data: token, email: oldUser.email, first_name: oldUser.first_name, middle_name: oldUser.middle_name, last_name: oldUser.last_name, phone: oldUser.phone, id : oldUser._id.toString()});
+            console.log(oldUser)
+            return res.send({ status: 200, data: token, email: oldUser.email, first_name: oldUser.first_name, middle_name: oldUser.middle_name, last_name: oldUser.last_name, phone: oldUser.phone, address: oldUser.address, id : oldUser._id.toString()});
         }else{
             return res.send({ error: "error"});
         }
@@ -563,10 +567,12 @@ app.post("/parcel-input", upload.array("file"), async(req, res) => {
          
                     $addToSet: {
                         parcel: {
-                            parcel_non_bulk_count: parseInt(file.parcel_non_bulk_count),
-                            parcel_bulk_count: parseInt(file.parcel_bulk_count),
-                            assigned_parcel_count: parseInt(file.assigned_parcel_count),
-                            total_parcel: parseInt(file.total_parcel),
+                            assigned_parcel_non_bulk_count: parseInt(file.assigned_parcel_non_bulk_count),
+                            assigned_parcel_bulk_count: parseInt(file.assigned_parcel_bulk_count),
+                            assigned_parcel_total: parseInt(file.assigned_parcel_total),
+                            delivered_parcel_non_bulk_count: parseInt(file.delivered_parcel_non_bulk_count),
+                            delivered_parcel_bulk_count: parseInt(file.delivered_parcel_bulk_count),
+                            delivered_parcel_total: parseInt(file.delivered_parcel_total),
                             remaining_parcel: parseInt(file.remaining_parcel),
                             screenshot: screenshotResult.url,
                             receipt: receiptResult.url,
@@ -1096,10 +1102,12 @@ app.post("/retrieve-parcel-data", async(req, res)=> {
             'first_name' : 1,
             'middle_name' : 1,
             'last_name' : 1,
-            'count_non_bulk' : {'$ifNull' : ["$parcel.parcel_non_bulk_count" , "no record" ]},
-            'count_bulk' : {'$ifNull' : ["$parcel.parcel_bulk_count" , "no record" ]},
-            'count_total_parcel' : {'$ifNull' : ["$parcel.total_parcel" , "no record" ]},
-            'assigned_parcel_count' : {'$ifNull' : ["$parcel.assigned_parcel_count" , "no record" ]},
+            'assigned_parcel_non_bulk_count' : {'$ifNull' : ["$parcel.assigned_non_bulk_count" , "no record" ]},
+            'assigned_parcel_bulk_count' : {'$ifNull' : ["$parcel.assigned_parcel_bulk_count" , "no record" ]},
+            'assigned_parcel_total' : {'$ifNull' : ["$parcel.assigned_parcel_total" , "no record" ]},
+            'delivered_parcel_non_bulk_count' : {'$ifNull' : ["$parcel.delivered_parcel_non_bulk_count" , "no record" ]},
+            'delivered_parcel_bulk_count' : {'$ifNull' : ["$parcel.delivered_parcel_bulk_count" , "no record" ]},
+            'delivered_parcel_total' : {'$ifNull' : ["$parcel.delivered_parcel_total" , "no record" ]},
             'screenshot' : {'$ifNull' : ["$parcel.screenshot" , "no record" ]},
             'receipt' : {'$ifNull' : ["$parcel.receipt" , "no record" ]},
             '_id' : 0
@@ -1125,30 +1133,85 @@ app.post("/retrieve-parcel-data", async(req, res)=> {
 
 app.post("/retrieve-user-parcel-data", async(req, res)=> {
 
-    const { user } = req.body;
+    const { begin, end, user } = req.body;
 
     const userEmail = user;
 
     try {
     const parcelPerUser = await Parcel.aggregate([
-      {'$match' : {'user' : userEmail }},
+      { '$match' : {'user' : userEmail }},
       { '$unwind': "$parcel" },
-
-
+      
+      
       {
         '$project': {
           'date': "$parcel.date",
-          'count_bulk': "$parcel.parcel_bulk_count",
-          'count_non_bulk': "$parcel.parcel_non_bulk_count",
-          'count_total_parcel': "$parcel.total_parcel",
-          'assigned_parcel_count': "$parcel.assigned_parcel_count",
-          'screenshot': "$parcel.screenshot",
-          'receipt': "$parcel.receipt",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+          'assigned_parcel_non_bulk_count' : {'$ifNull' : ["$parcel.assigned_non_bulk_count" , "no record" ]},
+          'assigned_parcel_bulk_count' : {'$ifNull' : ["$parcel.assigned_parcel_bulk_count" , "no record" ]},
+          'assigned_parcel_total' : {'$ifNull' : ["$parcel.assigned_parcel_total" , "no record" ]},
+          'delivered_parcel_non_bulk_count' : {'$ifNull' : ["$parcel.delivered_parcel_non_bulk_count" , "no record" ]},
+          'delivered_parcel_bulk_count' : {'$ifNull' : ["$parcel.delivered_parcel_bulk_count" , "no record" ]},
+          'delivered_parcel_total' : {'$ifNull' : ["$parcel.delivered_parcel_total" , "no record" ]},
+          'screenshot' : {'$ifNull' : ["$parcel.screenshot" , "no record" ]},
+          'receipt' : {'$ifNull' : ["$parcel.receipt" , "no record" ]},
+          'w_date' : "$parcel.w_date",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
           '_id' : 0,
         }
       },
       { 
-        $sort: { "date": -1 } 
+        $sort: { "w_date": -1 } 
+      },
+    ]);
+
+    console.log("Found parcels:", parcelPerUser);
+    return res.status(200).json({ status: 200, data: parcelPerUser });
+
+    } catch (error) {
+                return res.send({error: error});
+        }
+});
+
+
+app.post("/retrieve-user-parcel-data-filtered-date", async(req, res)=> {
+
+    const { begin, end, user } = req.body;
+
+    const userEmail = user;
+
+    console.log(begin)
+    try {
+    const parcelPerUser = await Parcel.aggregate([
+      { '$match' : {'user' : userEmail }},
+      { '$unwind': "$parcel" },
+      {
+      '$match': {
+        '$expr': {
+            '$and': [
+                {'$gte' : [{'$toLong': "$parcel.w_date"} ,  begin]},
+                {'$lt' : [{'$toLong': "$parcel.w_date"} , end]}
+            ]
+        }
+        }
+    },
+      
+      
+      {
+        '$project': {
+          'date': "$parcel.date",
+          'assigned_parcel_non_bulk_count' : {'$ifNull' : ["$parcel.assigned_non_bulk_count" , "no record" ]},
+          'assigned_parcel_bulk_count' : {'$ifNull' : ["$parcel.assigned_parcel_bulk_count" , "no record" ]},
+          'assigned_parcel_total' : {'$ifNull' : ["$parcel.assigned_parcel_total" , "no record" ]},
+          'delivered_parcel_non_bulk_count' : {'$ifNull' : ["$parcel.delivered_parcel_non_bulk_count" , "no record" ]},
+          'delivered_parcel_bulk_count' : {'$ifNull' : ["$parcel.delivered_parcel_bulk_count" , "no record" ]},
+          'delivered_parcel_total' : {'$ifNull' : ["$parcel.delivered_parcel_total" , "no record" ]},
+          'screenshot' : {'$ifNull' : ["$parcel.screenshot" , "no record" ]},
+          'receipt' : {'$ifNull' : ["$parcel.receipt" , "no record" ]},
+          'w_date' : "$parcel.w_date",                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+          '_id' : 0,
+        }
+      },
+      { 
+        $sort: { "w_date": -1 } 
       },
     ]);
 
@@ -1304,17 +1367,17 @@ app.post("/get-user-data-dashboard", async(req, res) => {
       {
         '$group': {
          '_id': {weekNumber : "$parcel.weekNumber"},
-         'parcel_non_bulk_count' : {'$sum': {'$sum' : "$parcel.parcel_non_bulk_count"}},
-         'parcel_bulk_count' : {'$sum': {'$sum' : "$parcel.parcel_bulk_count"}},
-         'total_parcel' : {'$sum': {'$sum' : "$parcel.total_parcel"}}
+         'delivered_parcel_non_bulk_count' : {'$sum': {'$sum' : "$parcel.delivered_parcel_non_bulk_count"}},
+         'delivered_parcel_bulk_count' : {'$sum': {'$sum' : "$parcel.delivered_parcel_bulk_count"}},
+         'delivered_parcel_total' : {'$sum': {'$sum' : "$parcel.delivered_parcel_total"}}
            },
       },
       {
         '$project': {
           'week': "$_id",
-          'parcel_non_bulk_count' : "$parcel_non_bulk_count",
-          'parcel_bulk_count' : "$parcel_bulk_count",
-          'total_parcel' : "$total_parcel",
+          'delivered_parcel_non_bulk_count' : "$delivered_parcel_non_bulk_count",
+          'delivered_parcel_bulk_count' : "$delivered_parcel_bulk_count",
+          'delivered_parcel_total' : "$delivered_parcel_total",
           '_id': 0
         }
       },
@@ -1335,7 +1398,7 @@ app.post("/get-user-data-dashboard", async(req, res) => {
         {'$match': {'parcel.weekNumber' : week}},
         {'$group': {
             _id: "$parcel.weekday",
-            parcel: {"$addToSet" : "$parcel.total_parcel"}
+            parcel: {"$addToSet" : "$parcel.delivered_parcel_total"}
             }
         },
         {
