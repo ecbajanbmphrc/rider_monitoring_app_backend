@@ -61,7 +61,7 @@ exports.s3UploadReceipt = async (file) => {
 
             return{
                Bucket: 'rmaimage',
-               Key: `receipt/id/${file.user}/r${dateNow}${index}.jpg`,
+               Key: `receipt/id/${file.id}/r${dateNow}${index}.jpg`,
                Body:  Buffer.from(value,  'base64')
             }
            
@@ -85,13 +85,27 @@ exports.s3UploadScreenshot = async (file) => {
          const dateNow =  Date.parse(new Date());
          const param = {
             Bucket: 'rmaimage',
-            Key:  `screenshot/id/${file.user}/s${dateNow}0.jpg`,
-            Body:  Buffer.from(file.screenshot,  'base64')
+            Key:  `proof_screenshot/id/${file.id}/s${dateNow}0.jpg`,
+            Body:  Buffer.from(file.assigned_parcel_screenshot,  'base64')
          }
          const data = await s3Client.send(new PutObjectCommand(param));
-         const url = `https://rmaimage.s3.ap-southeast-2.amazonaws.com/screenshot/id/${file.user}/s${dateNow}0.jpg`
+         const url = `https://rmaimage.s3.ap-southeast-2.amazonaws.com/proof_screenshot/id/${file.id}/s${dateNow}0.jpg`
          return {url : url, statusCode : data.$metadata.httpStatusCode}
 };
+
+exports.s3UploadSpxScreenshot = async (file) => {
+   const dateNow =  Date.parse(new Date());
+   const param = {
+      Bucket: 'rmaimage',
+      Key:  `spx_screenshot/id/${file.id}/s${dateNow}0.jpg`,
+      Body:  Buffer.from(file.screenshot,  'base64')
+   }
+   const data = await s3Client.send(new PutObjectCommand(param));
+   const url = `https://rmaimage.s3.ap-southeast-2.amazonaws.com/spx_screenshot/id/${file.id}/s${dateNow}0.jpg`
+   return {url : url, statusCode : data.$metadata.httpStatusCode}
+};
+
+
 
 
 
