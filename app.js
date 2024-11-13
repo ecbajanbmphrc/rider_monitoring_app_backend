@@ -26,7 +26,7 @@ app.use(express.json());
 
 var cors = require('cors');
 const { pipeline } = require("nodemailer/lib/xoauth2");
-const { s3UploadReceipt, s3UploadScreenshot } = require('./s3');
+const { s3UploadReceipt, s3UploadScreenshot, s3UploadSpxScreenshot } = require('./s3');
 // const { uploadToS3 } = require("./s3");
 const storage = multer.memoryStorage();
 // const upload = multer({storage});
@@ -267,6 +267,11 @@ app.post("/get-rider-user", async(req, res)=> {
                     "j_date" : 1,
                     "hub_name" : "$hub_details.hub_name"
                 }
+            },
+            {
+                $sort:{
+                    "last_name": 1
+                }
             }
               
           
@@ -318,32 +323,38 @@ app.post("/get-admin-user", async(req, res)=> {
 });
 
 
-app.put("/attendance-input-time-in", async(req, res) => {
-    const dataSet = {user, time_in_coordinates, time_out_coordinates, time_out} = req.body;
-    
+app.put("/attendance-input-time-in", upload.array("file"), async(req, res) => {
+ 
+    const file = req.body;
     const dateNow =  new Date();
     const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone:'Asia/Manila'});
     const timeNow = new Date().toLocaleString('en-us',{hour:'numeric', minute:'numeric', second:'numeric', timeZone:'Asia/Manila'});
-
+ 
     try {
-        const userEmail = user;
+        const userEmail = file.user;
+        const screenshotResult = await s3UploadScreenshot(file);
+        console.log(file.id)
+        if(screenshotResult.statusCode === 200) {
         await AttendanceInput.findOneAndUpdate({user: userEmail},{
           
             $addToSet: {
                 attendance: {
                     w_date: dateNow,
                     date: dateToday,
+                    assigned_parcel_screenshot: screenshotResult.url,
                     time_in : timeNow,
-                    time_in_coordinates : time_in_coordinates,
-                    time_out: time_out,
-                    time_out_coordinates : time_out_coordinates
+                    time_in_coordinates : JSON.parse(file.time_in_coordinates),
+                    time_out: '',
+                    time_out_coordinates : JSON.parse(file.time_out_coordinates)
 
                 }
             }
             
-        });
-        res.send({status: 200, data:"Attendance Created", dataSet: dataSet})
+         });
+        }
+        res.send({status: 200, data:"Attendance Created"})
     } catch (error) {
+        console.log(error)
         res.send({ status: "error", data: error});
     }
 });
@@ -390,166 +401,14 @@ app.put("/attendance-input-time-out", async(req, res) => {
 
         });
 
-        await AssignedParcel.create({
-            user: userEmail,
-            date: dateToday,
-            w_date: dateNow,
-            assigned_parcel_count: assignedParcel
-        })
         res.send({status: 200, data:"Attendance Created"})
     } catch (error) {
+        console.log(error)
         res.send({ status: "error", data: error});
     }
 });
 
 
-// app.post("/parcel-input", upload.single("file"), async(req, res) => {
-//     const user = req.body.user;
-//     const email = req.body.email;
-//     const parcel_non_bulk_count = req.body.parcel_non_bulk_count;
-//     const parcel_bulk_count = req.body.parcel_bulk_count;
-//     const assigned_parcel_count = req.body.assigned_parcel_count;
-//     const dateNow =  Date.parse(new Date());
-//     const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
-//     let receiptArr = [];
-//     var x = 1;
-
-//     const bucketName = 'rmaimage';
-  
-//    try{
-//     if (Array.isArray(req.body.myFile)){
-//     req.body.myFile.forEach(async function (item, index) {
-//         const bufferImg = Buffer.from(item,  'base64');
-//         let mor = '';
-
-//         const params = {
-//             Bucket: bucketName,
-//             Key:  "receipt/"+"id?/" +user+ "/" + "r"+dateNow + index+".jpg",
-//             Body: bufferImg
-//         }
-
-        
-
-//         const imgData = s3.upload(params, (err, data) => {
-//             let y = "wa";
-//             if (err){
-//                 console.log(err)
-//                 return
-//             }
-//             if(data){
-//                 // console.log(data)
-//                 mor = y
-//                 return data.Location
-//             }
-           
-//         });
-      
-//         receiptArr.push("https://rmaimage.s3.ap-southeast-2.amazonaws.com/receipt/"+"id%3F/" +user+ "/" + "r"+dateNow + index+".jpg")
-        
-//         // receiptArr.push(imgData);
-
-  
-
-//     }) 
-
-//     }else{
-
-
-//         const buf = Buffer.from(req.body.myFile, 'base64');
-//         const params = {
-//             Bucket: bucketName,
-//             Key: "receipt/"+"id?/" +user+ "/" + "r"+dateNow +"0.jpg",
-//             Body: buf
-//         }
-
-//         s3.upload(params, (err, data) => {
-//             if (err){
-//                 console.log(err)
-//             }
-    
-//             if(data){
-//                 receiptArr.push(data.Location);
-//             }
-//         })  
-//      }
-    
-
-
-//         await ParcelInput.findOneAndUpdate({user: email},{
-//         $addToSet: {
-//             parcel: {
-//                 parcel_non_bulk_count : parcel_non_bulk_count,
-//                 parcel_bulk_count: parcel_bulk_count,
-//                 assigned_parcel_count: assigned_parcel_count,
-//                 receipt : receiptArr,
-//                 date : dateToday,
-//                 w_date : dateNow
-//             }
-//          }
-            
-//         });
-//         res.send({status: 200, data:"Parcel added", dataSet: dataSet})
-//     }  catch (error) {
-//             res.send({ status: "error", data: error});
-//     }
-
-
-    // s3.upload(params, (err, data) => {
-    //     if (err){
-    //         console.log(err)
-    //     }
-
-    //     if(data){
-    //         console.log("success")
-    //     }
-    // })
-
-    
-    
-
-
-    // const uploadToS3 = async ({file}) => {
-    //     const key = "id1";
-    //     const command = new PutObjectCommand({
-    //      Bucket: BUCKET,
-    //      Key: key,
-    //      Body: file,
-    //      ContentType: "jpeg",
-    //     });
-     
-    //     try {
-    //      await s3.send(command);
-    //      return { key };
-    //     }catch (error){
-    //      console.log(error);
-    //      return {error};
-    //     }
-    //  };
-
-    //  const {error, key} = uploadToS3(buf);
-
-
-    // try {
-    //     const userEmail = user;
-    //     await ParcelInput.findOneAndUpdate({user: userEmail},{
-         
-    //     $addToSet: {
-    //         parcel: {
-    //             parcel_non_bulk_count,
-    //             parcel_bulk_count,
-    //             assigned_parcel_count,
-    //             receipt,
-    //             date : dateToday,
-    //             w_date : dateNow
-    //         }
-    //      }
-            
-    //     });
-    //     res.send({status: 200, data:"Parcel added", dataSet: dataSet})
-    // } catch (error) {
-    //     res.send({ status: "error", data: error});
-    // }
-// });
 app.post("/parcel-input", upload.array("file"), async(req, res) => {
     
   try{
@@ -560,7 +419,9 @@ app.post("/parcel-input", upload.array("file"), async(req, res) => {
         const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone: 'Asia/Manila'});
         const file = req.body;
         const receiptResult = await s3UploadReceipt(file);
-        const screenshotResult = await s3UploadScreenshot(file);
+        const screenshotResult = await s3UploadSpxScreenshot(file);
+        const timeNow = new Date().toLocaleString('en-us',{hour:'numeric', minute:'numeric', second:'numeric', timeZone:'Asia/Manila'});
+
         if(receiptResult.statusCode === 200 && screenshotResult.statusCode === 200) {
 
             await ParcelInput.findOneAndUpdate({user: file.email},{
@@ -584,6 +445,17 @@ app.post("/parcel-input", upload.array("file"), async(req, res) => {
                      }
                         
                     });
+            
+            await Attendance.findOneAndUpdate({user: file.email, "attendance.date": dateToday},{
+            
+                $set: { 
+                    "attendance.$.time_out" : timeNow,
+                    "attendance.$.time_out_coordinates" : 
+                        JSON.parse(file.time_out_coordinates)   
+                }
+            
+            });
+
 
            res.send({ status: 200, data: "success eyy", receiptResult});
         }
@@ -755,6 +627,7 @@ app.post("/retrieve-user-attendance-today", async(req, res)=> {
             'middle_name' : 1,
             'last_name' : 1,
             'email' : 1,
+            'proof' : {'$ifNull' : ["$attendance.assigned_parcel_screenshot" , "no record" ]},
             'timeIn' : {'$ifNull' : ["$attendance.time_in" , "no record" ]},
             'timeInCoordinates' : {'$ifNull' : ["$attendance.time_in_coordinates" , "no record" ]},
             'timeOut' : {'$ifNull' : ["$attendance.time_out" , "no record" ]},
