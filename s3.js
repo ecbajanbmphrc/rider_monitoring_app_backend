@@ -61,7 +61,7 @@ exports.s3UploadReceipt = async (file) => {
 
             return{
                Bucket: 'rmaimage',
-               Key: `receipt/id/${file.id}/r${dateNow}${index}.jpg`,
+               Key: `receipt/id/${file.user}/r${dateNow}${index}.jpg`,
                Body:  Buffer.from(value,  'base64')
             }
            
