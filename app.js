@@ -329,11 +329,16 @@ app.put("/attendance-input-time-in", upload.array("file"), async(req, res) => {
     const dateNow =  new Date();
     const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone:'Asia/Manila'});
     const timeNow = new Date().toLocaleString('en-us',{hour:'numeric', minute:'numeric', second:'numeric', timeZone:'Asia/Manila'});
+
+    console.log("test pic", file.assigned_parcel_screenshot)
+
+    if (file.assigned_parcel_screenshot === "") return res.send({ status: "error", data: "Please insert your assigned parcel picture."})
+
+    
  
     try {
         const userEmail = file.user;
         const screenshotResult = await s3UploadScreenshot(file);
-        console.log(file.id)
         if(screenshotResult.statusCode === 200) {
         await AttendanceInput.findOneAndUpdate({user: userEmail},{
           
@@ -587,7 +592,7 @@ app.post("/retrieve-user-attendance-today", async(req, res)=> {
 
     {
         '$match' : {'$expr' :{ '$and' :[ {'$eq' : ['$isActivate' , true]} 
-        // , { '$eq' : ['$type' , 1]}
+
     ]
             } 
         }
@@ -616,10 +621,54 @@ app.post("/retrieve-user-attendance-today", async(req, res)=> {
     },
 
     {
+        '$lookup' : {
+          "from": "parcels",
+          "let" : {
+              "email" : "$email"
+          },
+          'pipeline' : [{
+              '$match' : { 
+                  '$expr' :{
+                      '$eq' :
+                          ['$user' , "$$email"]
+              }}
+            },
+  
+            { '$unwind': "$parcel" },
+            { '$match' : {'parcel.date' : selectDate}},
+  
+          ],
+          'as': "parcel_info"
+        }  
+      },
+
+    {
           '$replaceRoot': {'newRoot': { '$mergeObjects': [{ '$arrayElemAt': ["$attendance_info", 0]}, "$$ROOT" ]}}
     },
 
     {
+        '$replaceRoot': {'newRoot': { '$mergeObjects': [{ '$arrayElemAt': ["$parcel_info", 0]}, "$$ROOT" ]}}
+    },
+
+    // {
+    //     '$project' : 
+    //     {
+    //         'date' : 1,
+    //         'first_name' : 1,
+    //         'middle_name' : 1,
+    //         'last_name' : 1,
+    //         'email' : 1,
+    //         'proof' : {'$ifNull' : ["$attendance.assigned_parcel_screenshot" , "no record" ]},
+    //         'timeIn' : {'$ifNull' : ["$attendance.time_in" , "no record" ]},
+    //         'timeInCoordinates' : {'$ifNull' : ["$attendance.time_in_coordinates" , "no record" ]},
+    //         'timeOut' : {'$ifNull' : ["$attendance.time_out" , "no record" ]},
+    //         'timeOutCoordinates' : {'$ifNull' : ["$attendance.time_out_coordinates" , "no record" ]},
+    //         'parcel' : "$parcel.assigned_parcel_non_bulk_count",
+    //         '_id' : 0
+    //     }
+    // },
+
+        {
         '$project' : 
         {
             'date' : 1,
@@ -632,6 +681,7 @@ app.post("/retrieve-user-attendance-today", async(req, res)=> {
             'timeInCoordinates' : {'$ifNull' : ["$attendance.time_in_coordinates" , "no record" ]},
             'timeOut' : {'$ifNull' : ["$attendance.time_out" , "no record" ]},
             'timeOutCoordinates' : {'$ifNull' : ["$attendance.time_out_coordinates" , "no record" ]},
+            'parcel' : {'$ifNull' : ["$parcel.receipt", "no record"]},
             '_id' : 0
         }
     },
