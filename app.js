@@ -746,13 +746,19 @@ app.post("/export-attendance-data", async(req, res)=> {
                    'timeIn' : '$attendance.time_in',
                    'timeOut' : '$attendance.time_out',
                    'email' : '$user',
-                   'first_name' : "$first_name",
-                   'middle_name' : "$middle_name",
-                   'last_name' : "$last_name",
+                   'first_name' : {$toUpper: "$first_name"},
+                   'middle_name' : {$toUpper: "$middle_name"},
+                   'last_name' : {$toUpper: "$last_name"},
                    
                    
                 } 
-            }    
+            }, 
+            {
+                '$sort':{
+                    'last_name' : 1
+                }
+            }
+        
         
         ])
          
