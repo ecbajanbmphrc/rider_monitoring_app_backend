@@ -171,6 +171,7 @@ app.put("/update-status", async(req, res) => {
         await User.findOneAndUpdate({email: userEmail}, {$set: {isActivate: isActivate}});
         res.send({status: 200, data:"Status updated"})
     } catch(error){
+      
         res.send({status: "errorr", data: error});
     }
 
@@ -180,12 +181,29 @@ app.put("/update-user-hub", async(req, res) => {
     const {hub_id, email} = req.body;
 
     const userEmail = email;
-    console.log(userEmail);
     try{
         await User.findOneAndUpdate({email: userEmail}, {$set: {hub_id: hub_id}});
         res.send({status: 200, data:"Hub updated"})
     } catch(error){
+        console.log(error)
+        res.send({status: "error", data: error});
+    }
+
+});
+
+app.put("/update-user-detail-admin", async(req, res) => {
+    const {rider_id, rider_type, first_name, middle_name, last_name, address, phone, email} = req.body;
+
+    const userEmail = email;
+
+    console.log(req.body)
+    try{
+        await User.findOneAndUpdate({email}, {$set: {rider_id, rider_type, first_name, middle_name, last_name, address, phone}});
+        res.send({status: 200, data:"User Detail updated"})
+        console.log("true")
+    } catch(error){
         res.send({status: "errorr", data: error});
+        console.log("true")
     }
 
 });
@@ -256,6 +274,8 @@ app.post("/get-rider-user", async(req, res)=> {
             },
             {
                 $project: {
+                    "rider_id" : 1,
+                    "rider_type" : 1,
                     "first_name" : 1,
                     "middle_name" : 1,
                     "last_name" : 1,
@@ -483,7 +503,7 @@ app.post("/retrieve-parcel-input", async (req, res) => {
     const weekDayName =  moment().tz("Asia/Manila").format('dddd');
 
     try {
-        console.log("Searching for parcels for user:", user);
+    
 
     
         const parcels = await Parcel.aggregate([
@@ -650,23 +670,7 @@ app.post("/retrieve-user-attendance-today", async(req, res)=> {
         '$replaceRoot': {'newRoot': { '$mergeObjects': [{ '$arrayElemAt': ["$parcel_info", 0]}, "$$ROOT" ]}}
     },
 
-    // {
-    //     '$project' : 
-    //     {
-    //         'date' : 1,
-    //         'first_name' : 1,
-    //         'middle_name' : 1,
-    //         'last_name' : 1,
-    //         'email' : 1,
-    //         'proof' : {'$ifNull' : ["$attendance.assigned_parcel_screenshot" , "no record" ]},
-    //         'timeIn' : {'$ifNull' : ["$attendance.time_in" , "no record" ]},
-    //         'timeInCoordinates' : {'$ifNull' : ["$attendance.time_in_coordinates" , "no record" ]},
-    //         'timeOut' : {'$ifNull' : ["$attendance.time_out" , "no record" ]},
-    //         'timeOutCoordinates' : {'$ifNull' : ["$attendance.time_out_coordinates" , "no record" ]},
-    //         'parcel' : "$parcel.assigned_parcel_non_bulk_count",
-    //         '_id' : 0
-    //     }
-    // },
+  
 
         {
         '$project' : 
@@ -746,6 +750,7 @@ app.post("/export-attendance-data", async(req, res)=> {
                    'timeIn' : '$attendance.time_in',
                    'timeOut' : '$attendance.time_out',
                    'email' : '$user',
+                   'w_date' : {$toLong : "$attendance.w_date"},
                    'first_name' : {$toUpper: "$first_name"},
                    'middle_name' : {$toUpper: "$middle_name"},
                    'last_name' : {$toUpper: "$last_name"},
@@ -755,7 +760,8 @@ app.post("/export-attendance-data", async(req, res)=> {
             }, 
             {
                 '$sort':{
-                    'last_name' : 1
+                    'last_name' : 1,
+                    'w_date' : 1
                 }
             }
         
@@ -843,6 +849,46 @@ app.post("/export-parcel-data", async(req, res)=> {
 });
 
 
+app.post("/select-user-date-attendance", async(req, res)=> {
+   
+    const { user, date } = req.body;
+
+
+    try {
+       
+        const data = await Attendance.aggregate([
+
+            {
+               $match: {
+                'user' : user
+               } 
+            },
+            {
+             $unwind: "$attendance"
+            },
+            {
+                $match: {
+                'attendance.date' : date       
+                }
+            },
+            {
+                $project: {
+                    'attendance.time_in' : 1,
+                    'attendance.time_out' : 1
+                }
+            }
+
+            ]);
+        return res.status(200).json({ status: 200, data: data });
+
+    } catch (error) {
+            return res.send({error: error});
+    }
+
+});
+
+
+
 app.post("/view-user-attendance", async(req, res)=> {
    
     const { user } = req.body;
@@ -851,7 +897,7 @@ app.post("/view-user-attendance", async(req, res)=> {
 
     try {
        
-        console.log(userEmail,"user check")
+
         await Attendance.findOne({user: userEmail})
         .then((data)=>{
             return res.send({ status: 200, data: data.attendance });
@@ -862,45 +908,7 @@ app.post("/view-user-attendance", async(req, res)=> {
 
 });
 
-// app.post("/test-index", async(req, res)=> {
-   
-//     const { user } = req.body;
 
-//     const userEmail = user;
-
-//     try {
-       
-//         const data = await Attendance.aggregate([
-//             {
-           
-//             // $group :
-//             // {
-//             //     _id:"$user",
-//             //     date: { $addToSet : {$eq: ["$attendance.date" , "5/13/2024"]}}
-//             // },
-//             // $match : {
-//             //     "$date" : {$eq : "5/13/2024"}
-//             // },
-//             $project: {
-//               attendance: {
-//                 $filter:{
-//                     input:"$attendance",
-//                     as: "date",
-//                     cond: { $eq: [ "$$date.date", "5/13/2024"]}
-//                 }
-//               },
-//               user: "$user"
-//             }
-//             }
-//         ])
-         
-//         return res.send({ status: 200, data: data});
-        
-//     } catch (error) {
-//             return res.send({error: error});
-//     }
-
-// });
 
 app.post("/test-index", async(req, res)=> {
    
@@ -1031,7 +1039,7 @@ app.post("/retrieve-parcel-data", async(req, res)=> {
             'first_name' : 1,
             'middle_name' : 1,
             'last_name' : 1,
-            'assigned_parcel_non_bulk_count' : {'$ifNull' : ["$parcel.assigned_non_bulk_count" , "no record" ]},
+            'assigned_parcel_non_bulk_count' : {'$ifNull' : ["$parcel.assigned_parcel_non_bulk_count" , "no record" ]},
             'assigned_parcel_bulk_count' : {'$ifNull' : ["$parcel.assigned_parcel_bulk_count" , "no record" ]},
             'assigned_parcel_total' : {'$ifNull' : ["$parcel.assigned_parcel_total" , "no record" ]},
             'delivered_parcel_non_bulk_count' : {'$ifNull' : ["$parcel.delivered_parcel_non_bulk_count" , "no record" ]},
@@ -1349,34 +1357,283 @@ app.post("/get-user-data-dashboard", async(req, res) => {
 });
 
 
-app.post("/update-all-user-type", async(req, res) => {
+app.post("/get-admin-data-dashboard", async(req, res) => {
     try{
-    const updateData  = await User.updateMany(
-        { 
-
+    const dateToday = new Date().toLocaleString('en-us',{month:'numeric', day:'numeric' ,year:'numeric', timeZone:'Asia/Manila'});    
+    const registeredData = await User.find({ type:  1  }).countDocuments();
+    const hubData = await Hub.find().countDocuments();
+    const activeData = await User.aggregate([
+        {
+            $match: {
+                type : 1
+            }
         },
         {
-        $set: { type: 1
+            $group: {
+            _id: "$isActivate",
+            count: { $sum : 1}
+            }
+        },
+        {
+            $project: {
+                '_id' : 0,
+                'value' : '$count',
+                'label' : 
+                    {
+                        $cond: { if: { $eq: ["$_id" , true]}, then: "Active", else: "Inactive"}
+                    }       
+                
+            }
+        },
+        {
+            $sort: {
+                label : 1
+            }
         }
-    });
-    return res.status(200).json({ status: 200, data: updateData });
 
-  } catch (error) {
+    ]);
+    const dailyAttendance = await Attendance.aggregate([
+        {
+            $unwind: "$attendance"
+        },
+        {
+            $match: {
+                "attendance.date" : dateToday
+            }
+        },
+        {
+            $group: {
+                _id: null,
+                count: { $sum:1}
+            }
+        },
+      
+    ]);
+
+    const weeklyAttendance = await Attendance.aggregate([
+        {
+            $unwind: "$attendance"
+        },
+        {
+            $group: {
+                '_id' : { 
+                    "weekly" :
+                    {
+                        
+                        "$week": 
+                        
+                            {
+                                date: {"$toDate" : "$attendance.w_date"},
+                                timezone: "+0800"
+                            } 
+                         
+                    },
+                    "yearly" :
+                    {
+                        "$year": 
+                        
+                            {
+                                date: {"$toDate" : "$attendance.w_date"},
+                                timezone: "+0800"
+                            } 
+                        
+                    }
+                
+                },
+                
+                'count' : {$sum : 1}        
+            }
+        },
+        {
+            $sort: {
+                '_id.yearly' : -1,
+                '_id.weekly' : -1,
+            }
+        },
+        {
+            $match: {
+                '_id.weekly' : { $gte:1}
+            }
+        },
+        {
+            $limit : 13
+        },
+        {
+            $sort: {
+                '_id.yearly' : 1,
+                '_id.weekly' : 1,
+            }
+        },
+        {
+            $addFields: {
+                'sWeekly' : {$concat :[ "wk" ,{ $toString : "$_id.weekly"}]}
+            }
+        },
+        {
+            $project :{
+                '_id' : 0,
+                'key' : "$sWeekly",
+                'value' : '$count'
+            }
+        },
+      
+      
+    ]);
+
+    const dailyDelivery = await Parcel.aggregate([
+        {
+            $unwind: "$parcel"
+        },
+        {
+            $match: {
+                "parcel.date" : dateToday
+            }
+        },
+        {
+            $group: {
+                _id: null,
+                delivered: { $sum: "$parcel.delivered_parcel_total"}
+            }
+        },
+        {
+            $project: {
+                delivered : {$ifNull: ["$delivered" , "0" ]}
+            }
+        }
+    ]);
+
+    const registryCount = await User.aggregate([
+        {
+            $match:{
+                type: 1
+            }
+        },
+     
+            {
+            $group: {
+                '_id' : { 
+                    "monthly" :
+                    {
+                        
+                        "$month": 
+                        
+                            {
+                                date: "$j_date",
+                                timezone: "+0800"
+                            } 
+                         
+                    },
+                    "yearly" :
+                    {
+                        "$year": 
+                        
+                            {
+                                date: "$j_date",
+                                timezone: "+0800"
+                            } 
+                        
+                    }
+                
+                },
+                
+                'count' : {$sum : 1}        
+            }
+        },
+        {
+            $addFields: {
+                month: {
+                    $let: {
+                        vars: {
+                            monthsInString: [, 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec']
+                        },
+                        in: {
+                            $arrayElemAt: ['$$monthsInString', '$_id.monthly']
+                        }
+                    }
+                }
+            }
+        },
+        {
+            $sort: {
+                '_id.yearly' : 1,
+                '_id.monthly' : 1,
+            }
+        },
+      
+    ]);
+    return res.status(200).json({ status: 200, registeredData: registeredData, hubData : hubData, activeData: activeData, dailyAttendance: dailyAttendance, dailyDelivery: dailyDelivery, weeklyAttendance: weeklyAttendance, 
+        registryCount: registryCount
+    });
+
+} catch (error) {
+    console.log(error)
     return res.send({error: error});
 }
+
+});
+
+
+
+
+
+app.put("/update-user-attendance", async(req, res) => {
+    
+    
+    const {date, user, time_in, time_out, dExist, nDate} = req.body;
+
+    const newDate =  new Date(`${nDate}`);
+    // const exist = dExist;
+    const userEmail = user;
+
+    console.log("date" , newDate)
+
+    try{
+
+        if(dExist) {
+        await Attendance.findOneAndUpdate({user: userEmail, "attendance.date": date}, 
+            {$set: {
+                "attendance.$.time_in": time_in,
+                "attendance.$.time_out": time_out
+            },})
+           
+            return res.send({status: 200, data:"Status updated"});
+            
+        }else{
+
+        await Attendance.findOneAndUpdate({user: userEmail}, 
+            {
+                $addToSet: {
+                    attendance: {
+                        w_date: newDate,
+                        date: date,  
+                        time_in : time_in,
+                        time_out: time_out,        
+                    }
+                }
+            })
+            return res.send({status: 200, data:"Status updated"});
+   
+            }
+       
+
+    } catch(error){
+        console.log(error)
+        return res.send({status: "error", data: error});
+
+    }
 
 
 });
 
 
-app.post("/update-all-hub", async(req, res) => {
+app.post("/update-all-user-detail", async(req, res) => {
     try{
     const updateData  = await User.updateMany(
         { 
 
         },
         {
-        $set: { hub_id: ""
+        $set: { rider_type: "2WH"
         }
     });
     return res.status(200).json({ status: 200, data: updateData });

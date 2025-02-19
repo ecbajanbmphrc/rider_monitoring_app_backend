@@ -14,7 +14,9 @@ const UserDetailSchema = new mongoose.Schema({
     isActivate: Boolean,
     j_date : Date,
     hub_id : String,
-    type: Number
+    type: Number,
+    rider_id : Number,
+    rider_type: String,
 },{
     collection:"users"
 });
