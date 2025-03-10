@@ -76,7 +76,7 @@ app.get("/", (req, res) => {
 
 
 app.post("/register-user-detail", async(req, res) => {
-    const {first_name, middle_name, last_name, email, phone, address, password} = req.body;
+    const {rider_id, rider_type, first_name, middle_name, last_name, email, phone, address, password} = req.body;
 
     const encryptedPassword = await bcrypt.hash(password, 8);
 
@@ -88,6 +88,8 @@ app.post("/register-user-detail", async(req, res) => {
 
     try {
         await User.create({
+            rider_id,
+            rider_type,
             first_name,
             middle_name,
             last_name,
@@ -391,7 +393,7 @@ app.get("/retrieve-user-attendance", async(req, res)=> {
 
     try {
        
-       console.log(userEmail,"user check")
+     
        const userAttendance = await Attendance.findOne({user: userEmail, "attendance.date": dateToday}, {
             "attendance.$" : 1      
         })
@@ -751,9 +753,12 @@ app.post("/export-attendance-data", async(req, res)=> {
                    'timeOut' : '$attendance.time_out',
                    'email' : '$user',
                    'w_date' : {$toLong : "$attendance.w_date"},
+                   'rider_id' : "$rider_id",
+                   'rider_type' : "$rider_type",
                    'first_name' : {$toUpper: "$first_name"},
                    'middle_name' : {$toUpper: "$middle_name"},
                    'last_name' : {$toUpper: "$last_name"},
+                   
                    
                    
                 } 
@@ -897,11 +902,39 @@ app.post("/view-user-attendance", async(req, res)=> {
 
     try {
        
+        // await Attendance.findOne({user: userEmail})
+        // .then((data)=>{
+        //     return res.send({ status: 200, data: data.attendance });
+        // })
 
-        await Attendance.findOne({user: userEmail})
-        .then((data)=>{
-            return res.send({ status: 200, data: data.attendance });
-        })
+        const data = await Attendance.aggregate([
+            {
+                $unwind : "$attendance"
+            },
+            {
+                $match : {
+                    user: userEmail
+                }
+            },
+            {
+
+                $project : {
+                     'w_date' : "$attendance.w_date",
+                     'date' : "$attendance.date",
+                     'time_in' : { $ifNull: ['$attendance.time_out', null]},
+                     'time_in_coordinates' : { $ifNull : ["$attendance.time_in_coordinates" , null]},
+                     'time_out' : { $ifNull: ['$attendance.time_out', null]},
+                     'time_out_coordinates' : { $ifNull : ["$attendance.time_out_coordinates" , null]},
+                     'proof' : {$ifNull : ["$attendance.assigned_parcel_screenshot" , null]},
+                } 
+            }, 
+            {
+                $sort : {
+                    'w_date' : 1
+                }
+            }
+        ])
+        return res.send({status: 200, data : data})
     } catch (error) {
             return res.send({error: error});
     }
