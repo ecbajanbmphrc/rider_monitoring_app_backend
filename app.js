@@ -921,7 +921,7 @@ app.post("/view-user-attendance", async(req, res)=> {
                 $project : {
                      'w_date' : "$attendance.w_date",
                      'date' : "$attendance.date",
-                     'time_in' : { $ifNull: ['$attendance.time_out', null]},
+                     'time_in' : { $ifNull: ['$attendance.time_in', null]},
                      'time_in_coordinates' : { $ifNull : ["$attendance.time_in_coordinates" , null]},
                      'time_out' : { $ifNull: ['$attendance.time_out', null]},
                      'time_out_coordinates' : { $ifNull : ["$attendance.time_out_coordinates" , null]},
@@ -930,7 +930,7 @@ app.post("/view-user-attendance", async(req, res)=> {
             }, 
             {
                 $sort : {
-                    'w_date' : 1
+                    'w_date' : -1
                 }
             }
         ])
