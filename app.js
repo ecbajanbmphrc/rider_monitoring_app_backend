@@ -795,20 +795,36 @@ app.post("/export-attendance-data", async (req, res) => {
       {
         $addFields: {
           timeInHours: {
-            $toLong: {
-              $dateFromString: {
-                dateString: {
-                  $concat: ["$attendance.date", " ", "$attendance.time_in"],
-                },
-                timezone: "Asia/Manila",
+            $cond: [
+              {
+                $ne: ["$attendance.time_in", ""],
               },
-            },
+              {
+                $toLong: {
+                  $dateFromString: {
+                    dateString: {
+                      $concat: [
+                        "$attendance.date",
+                        " ",
+                        "$attendance.time_in",
+                      ],
+                    },
+                    timezone: "Asia/Manila",
+                  },
+                },
+              },
+              0,
+            ],
           },
           timeOutHours: {
             $cond: [
               {
-                $ne: ["$attendance.time_out", ""],
+                $or:[
+                  {$eq: ["$attendance.time_out", ""]},
+                  {$eq: ["$attendance.time_out", null]}
+              ]
               },
+              0,
               {
                 $toLong: {
                   $dateFromString: {
@@ -822,8 +838,7 @@ app.post("/export-attendance-data", async (req, res) => {
                     timezone: "Asia/Manila",
                   },
                 },
-              },
-              0,
+              }
             ],
           },
           day:{
@@ -841,8 +856,12 @@ app.post("/export-attendance-data", async (req, res) => {
           totalHours: {
             $cond: [
               {
-                $ne: ["$attendance.time_out", ""],
+                $or:[
+                    {$eq: ["$attendance.time_out", ""]},
+                    {$eq: ["$attendance.time_out", null]}
+                ]
               },
+              "00:00",
               {
                 $let: {
                   vars: {
@@ -866,9 +885,11 @@ app.post("/export-attendance-data", async (req, res) => {
                     },
                   },
                   in: { $concat: [ {$cond : [{ $lt : [{$strLenCP : "$$cHour"}, 2,  ]  } , { $concat: [ "0" ,"$$cHour"]} , "$$cHour"]}, ":", {$cond : [{ $lt : [{$strLenCP : "$$cMinute"}, 2,  ]  } , { $concat: [ "0" ,"$$cMinute"]} , "$$cMinute"]}] },
+                  // in: { $concat: ["$$cHour" , ":" , "$$cMinute" ] },
+                  // in: { $strLenCP: {$toString : "$timeOutHours"}  },
                 },
               },
-              "00:00",
+             
             ],
           },
           remarks: {
@@ -961,9 +982,10 @@ app.post("/export-attendance-data", async (req, res) => {
         },
       },
     ]);
-
+    console.log(data)
     return res.send({ status: 200, data: data });
   } catch (error) {
+    console.log(error)
     return res.send({ error: error });
   }
 });
@@ -1857,12 +1879,10 @@ app.post("/update-all-user-detail", async (req, res) => {
 });
 
 app.listen(8082, () => {
-  var a = moment.tz("Asia/Manila").week();
-  var weekDayName = moment().tz("Asia/Manila").format("dddd");
+
 
   console.log("node js server started");
 
-  const date1 = Date.parse("2/12/2025 12:10:00 PM");
 
-  console.log(date1);
+
 });
