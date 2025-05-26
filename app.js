@@ -73,6 +73,35 @@ app.get("/", (req, res) => {
   res.send({ status: "started" });
 });
 
+app.get("/get-hub-list", async (req, res)=>{
+
+
+     try {
+       const data = await Hub.aggregate([
+      {
+        $project: {
+   
+        value : "$_id",
+        label : "$hub_name",
+        _id : 0,  
+  
+        },
+      },{
+          $sort:{
+          "label" : 1
+        }
+      }
+    ]);
+    
+    return res.send({ status: 200, data: data });
+  } catch (error) {
+    console.error("Error retrieving hub data:", error);
+    return res.status(500).json({ error: error.message });
+  }
+
+
+});
+
 app.post("/register-user-detail", async (req, res) => {
   const {
     rider_id,
@@ -375,6 +404,23 @@ app.post("/get-admin-user", async (req, res) => {
 
 app.put("/attendance-input-time-in", upload.array("file"), async (req, res) => {
   const file = req.body;
+  var time_in_coords = JSON.parse(file.time_in_coordinates);
+    const userEmail = file.user;
+
+    
+
+ 
+  
+  if (time_in_coords.latitude === null || time_in_coords.longitude === null) 
+    {
+      const hubId = await User.find({"email" : userEmail}, {"hub_id" : "$hub_id"})
+      console.log(hubId[0].hub_id);
+      const getHubCoords = await Hub.find({_id : hubId[0].hub_id}, {"coordinates" : "$coordinates"})
+      time_in_coords = getHubCoords[0].coordinates;
+       
+    } 
+
+
   const dateNow = new Date();
   const dateToday = new Date().toLocaleString("en-us", {
     month: "numeric",
@@ -389,7 +435,7 @@ app.put("/attendance-input-time-in", upload.array("file"), async (req, res) => {
     timeZone: "Asia/Manila",
   });
 
-  console.log("test pic", file.assigned_parcel_screenshot);
+
 
   if (file.assigned_parcel_screenshot === "")
     return res.send({
@@ -398,7 +444,18 @@ app.put("/attendance-input-time-in", upload.array("file"), async (req, res) => {
     });
 
   try {
-    const userEmail = file.user;
+
+
+    const activeCheck = await User.findOne({email:userEmail, "isActivate" : true})
+
+    if(!activeCheck)  return res.send({ status: 412, data: "Your account is not activated." });
+    
+    const timeInCheck = await Attendance.findOne({user:userEmail, "attendandce.date": dateToday , "attendance.time_in": timeNow});
+
+    
+    if(timeInCheck)  return res.send({ status: 412, data: "Time in already recorded." });
+
+
     const screenshotResult = await s3UploadScreenshot(file);
     if (screenshotResult.statusCode === 200) {
       await AttendanceInput.findOneAndUpdate(
@@ -410,7 +467,7 @@ app.put("/attendance-input-time-in", upload.array("file"), async (req, res) => {
               date: dateToday,
               assigned_parcel_screenshot: screenshotResult.url,
               time_in: timeNow,
-              time_in_coordinates: JSON.parse(file.time_in_coordinates),
+              time_in_coordinates: time_in_coords,
               time_out: "",
               time_out_coordinates: JSON.parse(file.time_out_coordinates),
             },
@@ -424,6 +481,9 @@ app.put("/attendance-input-time-in", upload.array("file"), async (req, res) => {
     res.send({ status: "error", data: error });
   }
 });
+
+
+
 
 app.get("/retrieve-user-attendance", async (req, res) => {
   const userEmail = req.query.user;
@@ -457,13 +517,14 @@ app.put("/attendance-input-time-out", async (req, res) => {
     year: "numeric",
     timeZone: "Asia/Manila",
   });
-  const dateNow = new Date();
+
   const timeNow = new Date().toLocaleString("en-us", {
     hour: "numeric",
     minute: "numeric",
     second: "numeric",
     timeZone: "Asia/Manila",
   });
+
 
   try {
     const userEmail = user;
@@ -490,6 +551,27 @@ app.put("/attendance-input-time-out", async (req, res) => {
 app.post("/parcel-input", upload.array("file"), async (req, res) => {
   try {
     const weekNow = moment.tz("Asia/Manila").week();
+
+    const file = req.body;
+
+    var time_out_coords = JSON.parse(file.time_out_coordinates);
+
+    const activeCheck = await User.findOne({email:file.email, "isActivate" : true})
+
+    if(!activeCheck)  return res.send({ status: 412, data: "Your account is not activated." });
+
+
+   
+    if (time_out_coords.latitude === null || time_out_coords.longitude === null ) 
+      {
+        const hubId = await User.find({"email" : file.email}, {"hub_id" : "$hub_id"})
+   
+        const getHubCoords = await Hub.find({_id : hubId[0].hub_id}, {"coordinates" : "$coordinates"})
+        time_out_coords = getHubCoords[0].coordinates;
+        
+      } 
+
+ 
     var weekDayName = moment().tz("Asia/Manila").format("dddd");
     const dateNow = Date.parse(new Date());
     const dateToday = new Date().toLocaleString("en-us", {
@@ -498,7 +580,7 @@ app.post("/parcel-input", upload.array("file"), async (req, res) => {
       year: "numeric",
       timeZone: "Asia/Manila",
     });
-    const file = req.body;
+    
     const receiptResult = await s3UploadReceipt(file);
     const screenshotResult = await s3UploadSpxScreenshot(file);
     const timeNow = new Date().toLocaleString("en-us", {
@@ -548,9 +630,9 @@ app.post("/parcel-input", upload.array("file"), async (req, res) => {
         {
           $set: {
             "attendance.$.time_out": timeNow,
-            "attendance.$.time_out_coordinates": JSON.parse(
-              file.time_out_coordinates
-            ),
+            "attendance.$.time_out_coordinates": 
+              time_out_coords
+            ,
           },
         }
       );
@@ -612,7 +694,14 @@ app.post("/retrieve-parcel-input", async (req, res) => {
 
 app.post("/fetch-hub", async (req, res) => {
   try {
-    const hubData = await Hub.find();
+    const hubData = await Hub.aggregate([
+      {
+          $sort:{
+          "hub_name" : 1
+        }
+      }
+    ]);
+    
     return res.send({ status: 200, data: hubData });
   } catch (error) {
     console.error("Error retrieving hub data:", error);
