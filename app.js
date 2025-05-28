@@ -38,9 +38,7 @@ const upload = multer({
 });
 app.use(cors());
 
-const mongoURI =
-  "mongodb+srv://ecbajanbmphrc:EvqZlwFpXxeA6T6i@rmaproductionserverless.phmnjem.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=rmaProductionServerless";
-// const mongoURI = "mongodb+srv://ecbajanbmphrc:y7eIFXEbU07QQOln@cluster0.5tjfmk7.mongodb.net/rider_monitoring?retryWrites=true&w=majority&appName=Cluster0";
+const mongoURI = process.env.mongo_uri;
 
 const User = mongoose.model("users");
 
@@ -112,8 +110,11 @@ app.post("/register-user-detail", async (req, res) => {
     email,
     phone,
     address,
+    hub_id,
     password,
   } = req.body;
+
+  // return console.log(hub_id);
 
   const encryptedPassword = await bcrypt.hash(password, 8);
 
@@ -136,8 +137,11 @@ app.post("/register-user-detail", async (req, res) => {
       password: encryptedPassword,
       isActivate: false,
       j_date: dateNow,
+      hub_id,
       type: 1,
     });
+
+    
     await Attendance.create({
       user: email,
       attendance: [],
@@ -1507,6 +1511,8 @@ const transporter = nodemailer.createTransport({
 });
 
 app.post("/send-otp-register", async (req, res) => {
+
+
   const { email } = req.body;
 
   const oldUser = await User.findOne({ email: email });
@@ -1518,18 +1524,43 @@ app.post("/send-otp-register", async (req, res) => {
     code = String(code);
     code = code.substring(0, 4);
 
-    const info = await transporter.sendMail({
+    const info = transporter.sendMail({
       from: {
         name: "BMPower",
         address: process.env.Email,
       },
       to: email,
       subject: "OTP code",
-      html:
-        "<b>Your OTP code is</b> " +
+      html: "<b>Your OTP code is</b> " +
         code +
         "<b>. Do not share this code with others.</b>",
-    });
+      // dsn: {
+      //   id: "msg-124",
+      //   return: "headers",
+      //   notify: ["failure", "delay"],
+      //   recipient: "ecbajan.bmphrc@gmail.com",
+      // },
+    },
+      (error, data) => {
+
+        console.log("test", data);
+
+        if (error) {
+          console.error("awrwr");
+          return;
+        } else {
+          // console.log("test" , result);
+          // res.json('thanks for e-mailing me');
+          console.log("whut", result);
+          console.log("wufdfed", info.messageId);
+        }
+
+
+      }
+
+    );
+
+    console.log("rider",info)
     return res.send({ status: 200, data: info, email: email, code: code });
   } catch (error) {
     return res.send({ error: error });
