@@ -73,7 +73,6 @@ app.get("/", (req, res) => {
 
 app.get("/get-hub-list", async (req, res)=>{
 
-
      try {
        const data = await Hub.aggregate([
       {
@@ -454,7 +453,7 @@ app.put("/attendance-input-time-in", upload.array("file"), async (req, res) => {
 
     if(!activeCheck)  return res.send({ status: 412, data: "Your account is not activated." });
     
-    const timeInCheck = await Attendance.findOne({user:userEmail, "attendandce.date": dateToday});
+    const timeInCheck = await Attendance.findOne({user:userEmail, "attendance.date": dateToday});
 
     
     if(timeInCheck)  return res.send({ status: 412, data: "Time in already recorded." });
@@ -465,7 +464,7 @@ app.put("/attendance-input-time-in", upload.array("file"), async (req, res) => {
       await AttendanceInput.findOneAndUpdate(
         { user: userEmail },
         {
-          $addToSet: {
+          $push: {
             attendance: {
               w_date: dateNow,
               date: dateToday,
