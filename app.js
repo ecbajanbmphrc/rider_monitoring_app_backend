@@ -20,7 +20,8 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 var moment = require("moment-timezone");
-app.use(express.json());
+app.use(express.json({limit: '100mb'}));
+app.use(express.urlencoded({limit: '100mb'}));
 
 var cors = require("cors");
 const { pipeline } = require("nodemailer/lib/xoauth2");
