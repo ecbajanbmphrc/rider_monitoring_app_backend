@@ -21,7 +21,7 @@ const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 var moment = require("moment-timezone");
 app.use(express.json({limit: '100mb'}));
-app.use(express.urlencoded({limit: '100mb'}));
+app.use(express.urlencoded({limit: '100mb', extended : true}));
 
 var cors = require("cors");
 const { pipeline } = require("nodemailer/lib/xoauth2");
@@ -161,14 +161,14 @@ app.post("/login-user", async (req, res) => {
   const oldUser = await User.findOne({ email: email });
 
   if (!oldUser)
-    return res.send({ status: 401, data: "Invalid email or password" });
+    return res.send({ status: 401, data: "Email has not been registered" });
 
   if (oldUser.isActivate === false)
     return res.send({ status: 401, data: "User has not been activated yet." });
 
   if (await bcrypt.compare(password, oldUser.password)) {
     const token = jwt.sign({ email: oldUser.email }, JWT_SECRET);
-
+      console.log(res);
     if (res.status(201)) {
       console.log(oldUser);
       return res.send({
@@ -183,7 +183,7 @@ app.post("/login-user", async (req, res) => {
         id: oldUser._id.toString(),
       });
     } else {
-      return res.send({ error: "error" });
+      return res.send({data: "error" });
     }
   }
   {
